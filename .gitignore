@@ -221,3 +221,19 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Echelon local experiments and private configuration
+runs/
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.idea/
+.vscode/
+*.swp
+*~
+*.tmp
+.DS_Store
+Thumbs.db

@@ -1,0 +1,7 @@
+# Tested on Windows CPython 3.14; exact versions for repeatable experiments.
+gymnasium==1.4.0
+numpy==2.3.5
+stable-baselines3==2.9.2
+sb3-contrib==2.9.2
+torch==2.15.0
+pygame-ce==2.5.8

@@ -1,0 +1,16 @@
+{
+  "status": "frozen_before_final_test",
+  "selection_basis": "Phase 6 development evaluation against HeuristicGeneral: 41.1% score for the 50,000-additional-step checkpoint versus 31.5% for the Phase 5 original; the later Phase 6 final scored 37.1%.",
+  "selected_model": "runs/phase6_mixed_50000/checkpoints/model_76624_steps.zip",
+  "selected_sha256": "1e0db7d49009d0cfc7a7e8a4f0da48c48cfad58c701b35720de2a7ea68bab2ad",
+  "reference_model": "runs/first_25000/train_final.zip",
+  "reference_sha256": "cb6edb13e15e883b671e0490c6ed49cae63c189023ce752d486a3bca30765864",
+  "final_seed_split": "final",
+  "final_seed_base": 3037,
+  "deployment_indices": "0..99",
+  "assignments_per_seed": 4,
+  "opponents": ["random", "heuristic"],
+  "deployment": "random",
+  "evaluation_policy": "deterministic masked inference; score counts a draw as half a win",
+  "planned_output": "runs/phase7_final_test.json"
+}
