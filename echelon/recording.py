@@ -5,7 +5,6 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
-from sb3_contrib import MaskablePPO
 
 from .engine import apply_order, legal_orders, new_battle, score
 from .env import EchelonEnv
@@ -27,6 +26,29 @@ def state_snapshot(state):
             "winner": state.winner, "reason": state.reason}
 
 
+def decision_record(before, order, after, message, legal_count=None):
+    """One engine transition in the Phase 6/7 replay JSON format."""
+    old, new = state_snapshot(before), state_snapshot(after)
+    available_orders = legal_orders(before)
+    available = [{"unit": o.unit_id, "action": o.kind.value,
+                  "target": list(o.target) if isinstance(o.target, tuple) else o.target}
+                 for o in available_orders]
+    damage = sum(max(0, old["units"][name]["health"] - new["units"][name]["health"])
+                 for name in old["units"])
+    casualties = [name for name in old["units"] if old["units"][name]["effective"]
+                  and not new["units"][name]["effective"]]
+    return {"round": before.completed_rounds + 1,
+            "army": before.active_army, "unit": order.unit_id,
+            "unit_type": old["units"][order.unit_id]["kind"],
+            "action": order.kind.value,
+            "target": list(order.target) if isinstance(order.target, tuple) else order.target,
+            "legal_count": len(available_orders) if legal_count is None else legal_count,
+            "legal_orders": available,
+            "attack_opportunities": sum(o.kind == OrderType.ATTACK for o in available_orders),
+            "before": old, "after": new, "damage": damage,
+            "casualties": casualties, "message": message}
+
+
 def record_battle(policy, opponent: str, seed: int, side: str, first: str,
                   deployment: str = "random") -> dict:
     """Policy is a loaded MaskablePPO model or a fresh HeuristicGeneral."""
@@ -36,29 +58,10 @@ def record_battle(policy, opponent: str, seed: int, side: str, first: str,
 
     def observe(before, order, legal_count, after, message):
         nonlocal initial
-        old, new = state_snapshot(before), state_snapshot(after)
+        old = state_snapshot(before)
         if initial is None:
             initial = old
-        target = order.target
-        if isinstance(target, tuple):
-            target = list(target)
-        damage = sum(max(0, old["units"][name]["health"] - new["units"][name]["health"])
-                     for name in old["units"])
-        casualties = [name for name in old["units"] if old["units"][name]["effective"]
-                      and not new["units"][name]["effective"]]
-        opportunities = sum(o.kind == OrderType.ATTACK for o in legal_orders(before))
-        available = [{"unit": o.unit_id, "action": o.kind.value,
-                      "target": list(o.target) if isinstance(o.target, tuple) else o.target}
-                     for o in legal_orders(before)]
-        decisions.append({"round": before.completed_rounds + 1,
-                          "army": before.active_army, "unit": order.unit_id,
-                          "unit_type": old["units"][order.unit_id]["kind"],
-                          "action": order.kind.value, "target": target,
-                          "legal_count": legal_count,
-                          "legal_orders": available,
-                          "attack_opportunities": opportunities,
-                          "before": old, "after": new, "damage": damage,
-                          "casualties": casualties, "message": message})
+        decisions.append(decision_record(before, order, after, message, legal_count))
 
     env.order_observer = observe
     observation, _ = env.reset(seed=seed, options={"agent_army": side, "first_army": first})
@@ -188,6 +191,7 @@ def summarize(records: list[dict]) -> dict:
 
 
 def main():
+    from sb3_contrib import MaskablePPO
     parser = argparse.ArgumentParser(description="Record, analyze, and replay masked battles")
     parser.add_argument("--models", nargs="+",
                         help="Model .zip paths or 'heuristic'")

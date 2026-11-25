@@ -7,18 +7,19 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
+from . import encoding
 from .deployment import randomize_deployment
-from .engine import STATS, apply_order, legal_orders, new_battle
+from .engine import apply_order, legal_orders, new_battle
 from .generals import HeuristicGeneral, RandomGeneral
-from .model import ARMIES, BOARD_SIZE, MAX_ROUNDS, BattleState, Order, OrderType
+from .model import ARMIES, BattleState, Order
 
 
-KINDS = ("infantry", "cavalry", "artillery")
-CELLS = BOARD_SIZE * BOARD_SIZE
-SLOTS_PER_UNIT = 1 + CELLS + CELLS + len(KINDS)  # hold, advance, retreat, attack
-ACTION_COUNT = len(KINDS) * SLOTS_PER_UNIT       # 396
-UNIT_FEATURES = 10
-OBSERVATION_SIZE = 6 * UNIT_FEATURES + 3
+KINDS = encoding.KINDS
+CELLS = encoding.CELLS
+SLOTS_PER_UNIT = encoding.SLOTS_PER_UNIT
+ACTION_COUNT = encoding.ACTION_COUNT
+UNIT_FEATURES = encoding.UNIT_FEATURES
+OBSERVATION_SIZE = encoding.OBSERVATION_SIZE
 
 
 class EchelonEnv(gym.Env):
@@ -56,80 +57,31 @@ class EchelonEnv(gym.Env):
     def _army_units(self, army: str):
         if self.state is None:
             raise RuntimeError("Call reset() before encoding orders or observations")
-        return [next(u for u in self.state.units if u.army == army and u.kind == kind)
-                for kind in KINDS]
+        return encoding.army_units(self.state, army)
 
     def encode_order(self, order: Order) -> int:
         """Stable index for an agent-side order, whether legal in this state or not."""
-        own = self._army_units(self.agent_army)
-        enemy_army = ARMIES[1] if self.agent_army == ARMIES[0] else ARMIES[0]
-        enemies = self._army_units(enemy_army)
-        unit_slot = next(i for i, u in enumerate(own) if u.id == order.unit_id)
-        base = unit_slot * SLOTS_PER_UNIT
-        if order.kind == OrderType.HOLD:
-            return base
-        if order.kind in (OrderType.ADVANCE, OrderType.RETREAT):
-            row, col = order.target
-            if not (0 <= row < BOARD_SIZE and 0 <= col < BOARD_SIZE):
-                raise ValueError(f"Destination is outside the board: {order.target}")
-            if self.agent_army == "Red":
-                row = BOARD_SIZE - 1 - row
-            cell = row * BOARD_SIZE + col
-            offset = 1 if order.kind == OrderType.ADVANCE else 1 + CELLS
-            return base + offset + cell
-        if order.kind == OrderType.ATTACK:
-            target_slot = next(i for i, u in enumerate(enemies) if u.id == order.target)
-            return base + 1 + 2 * CELLS + target_slot
-        raise ValueError(f"Unknown order type: {order.kind}")
+        if self.state is None:
+            raise RuntimeError("Call reset() before encoding orders")
+        return encoding.encode_order(self.state, self.agent_army, order)
 
     def decode_action(self, action: int) -> Order:
         """Decode an in-space index; legality is checked separately by the mask."""
         if not self.action_space.contains(action):
             raise ValueError(f"Action is outside Discrete({ACTION_COUNT}): {action}")
-        unit_slot, slot = divmod(int(action), SLOTS_PER_UNIT)
-        unit_id = self._army_units(self.agent_army)[unit_slot].id
-        if slot == 0:
-            return Order(unit_id, OrderType.HOLD)
-        if slot <= CELLS:
-            cell = slot - 1
-            row, col = divmod(cell, BOARD_SIZE)
-            if self.agent_army == "Red":
-                row = BOARD_SIZE - 1 - row
-            return Order(unit_id, OrderType.ADVANCE, (row, col))
-        if slot <= 2 * CELLS:
-            cell = slot - 1 - CELLS
-            row, col = divmod(cell, BOARD_SIZE)
-            if self.agent_army == "Red":
-                row = BOARD_SIZE - 1 - row
-            return Order(unit_id, OrderType.RETREAT, (row, col))
-        enemy_army = ARMIES[1] if self.agent_army == ARMIES[0] else ARMIES[0]
-        target_slot = slot - 1 - 2 * CELLS
-        target_id = self._army_units(enemy_army)[target_slot].id
-        return Order(unit_id, OrderType.ATTACK, target_id)
+        if self.state is None:
+            raise RuntimeError("Call reset() before decoding actions")
+        return encoding.decode_action(self.state, self.agent_army, int(action))
 
     def action_masks(self) -> np.ndarray:
         """True exactly for indexes produced by engine.legal_orders()."""
-        mask = np.zeros(ACTION_COUNT, dtype=np.bool_)
-        if self.state is not None and not self.state.finished:
-            for order in legal_orders(self.state):
-                mask[self.encode_order(order)] = True
-        return mask
+        return (np.zeros(ACTION_COUNT, dtype=np.bool_) if self.state is None else
+                encoding.action_masks(self.state, self.agent_army))
 
     def _observation(self) -> np.ndarray:
-        enemy_army = ARMIES[1] if self.agent_army == ARMIES[0] else ARMIES[0]
-        values = []
-        for unit in self._army_units(self.agent_army) + self._army_units(enemy_army):
-            row = unit.row if self.agent_army == "Blue" else BOARD_SIZE - 1 - unit.row
-            kind = [float(unit.kind == name) for name in KINDS]
-            destroyed = unit.health == 0
-            routed = unit.health > 0 and unit.morale < 30
-            values.extend((row / (BOARD_SIZE - 1), unit.column / (BOARD_SIZE - 1),
-                           *kind, unit.health / STATS[unit.kind][0], unit.morale / 100,
-                           float(unit.effective), float(routed), float(destroyed)))
-        values.extend((self.state.completed_rounds / MAX_ROUNDS,
-                       float(self.first_army == self.agent_army),
-                       float(not self.state.finished)))
-        return np.asarray(values, dtype=np.float32)
+        if self.state is None:
+            raise RuntimeError("Call reset() before encoding orders or observations")
+        return encoding.observation(self.state, self.agent_army, self.first_army)
 
     def _info(self, **extra) -> dict:
         return {"agent_army": self.agent_army, "first_army": self.first_army,
