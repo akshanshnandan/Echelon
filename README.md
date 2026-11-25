@@ -1,6 +1,6 @@
 # Echelon
 
-Echelon is a Python research project in which AI generals command simplified Napoleonic armies. A deterministic 8×8 battle engine supports rule-based commanders and a Gymnasium environment for masked reinforcement learning. The project includes reproducible evaluations and a read-only visual replay viewer.
+Echelon is a Python research project in which human and AI generals command simplified Napoleonic armies. A deterministic 8×8 battle engine supports rule-based commanders and a Gymnasium environment for masked reinforcement learning. The project includes reproducible evaluations, a playable Human vs AI interface, and a read-only visual replay viewer.
 
 ![Echelon battle replay viewer](docs/phase7_result.png)
 
@@ -11,6 +11,7 @@ Echelon is a Python research project in which AI generals command simplified Nap
 - **RL environment:** Gymnasium observations contain 63 numeric values; the stable 396-action encoding has a legal-action mask for `sb3-contrib` MaskablePPO. The engine remains independent of Gymnasium.
 - **Research workflow:** Seeded mirrored deployments, separate training/development/final-test pools, checkpoint continuation, per-deployment evaluation, and verified JSON battle recording/replay.
 - **Visual replay:** A pygame-ce viewer shows formations, health, morale, movement, attacks, event logs, outcomes, and tactical counts. It reads saved records and does not simulate combat.
+- **Human vs AI:** A separate Pygame game lets you command Blue or Red against RandomGeneral, HeuristicGeneral, or a compatible saved MaskablePPO checkpoint. Only engine-legal destinations and targets are highlighted.
 
 **Stack:** Python 3.14 (tested on Windows), Gymnasium, NumPy, Stable-Baselines3, sb3-contrib, PyTorch, and pygame-ce. Versions are pinned in [requirements.txt](requirements.txt). The battle engine and text simulator use only the Python standard library.
 
@@ -53,6 +54,25 @@ Press **Space** to play/pause, **Left/Right** to step, **Home** to restart, **Up
 
 Press **1–4** to switch among untrained, Phase 5, selected Phase 6, and HeuristicGeneral. The [Phase 7 guide](docs/phase7.md) documents the file picker, controls, screenshots, and older Phase 6 recording format.
 
+## Play Human vs AI
+
+The default game needs no trained model:
+
+```powershell
+.\.venv\Scripts\python.exe -m echelon.play
+.\.venv\Scripts\python.exe -m echelon.play --human Red --opponent heuristic --first Blue --deployment random --seed 42
+```
+
+To face the locally saved selected Phase 6 MaskablePPO checkpoint:
+
+```powershell
+.\.venv\Scripts\python.exe -m echelon.play --human Red --opponent ppo --checkpoint runs/phase6_mixed_50000/checkpoints/model_76624_steps.zip --first Blue --deployment random --seed 54
+```
+
+Click a friendly unit, choose an order with **1–4** or the buttons, and click a highlighted square or enemy. **M** opens the in-game setup screen to change army, opponent, deployment, first move, seed, or PPO file. **R** restarts the same seed, **N** starts the next seed, and **S** saves a completed replay under `runs/human_games/`. A missing checkpoint is an error; no other general is substituted. See the [Phase 8 guide](docs/phase8.md) for controls and validation.
+
+![Live Human vs AI board with legal advance squares](docs/phase8_live.png)
+
 ## Train and evaluate
 
 The first experiment trains against `RandomGeneral` with sparse terminal rewards (+1 win, −1 loss, 0 draw). Actions are masked during training and inference.
@@ -93,7 +113,8 @@ The selected policy improved its final-test score against RandomGeneral by **6.4
 | `echelon/generals.py`, `simulation.py`, `benchmark.py` | Baseline commanders and text simulation |
 | `echelon/env.py`, `train.py`, `evaluate.py` | Gymnasium wrapper, masked PPO, paired evaluation |
 | `echelon/recording.py`, `replay_data.py`, `viewer.py` | Battle recording, validation, and visual playback |
+| `echelon/encoding.py`, `ppo_general.py`, `live_game.py`, `play.py` | Shared RL encoding, trained opponent adapter, live controller, and Human vs AI screen |
 | `echelon/export_comparison.py`, `final_test.py` | Matched replays and frozen final comparison |
 | `tests/`, `docs/`, `examples/` | Regression tests, research reports, sample replay |
 
-Possible future research and gameplay work includes **Human vs AI**, army drafting, terrain, additional unit types, self-play, and comparisons with other AI algorithms. These features are not implemented yet.
+Possible future research and gameplay work includes army drafting, terrain, additional unit types, self-play, and comparisons with other AI algorithms. These features are not implemented yet.
