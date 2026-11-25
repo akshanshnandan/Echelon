@@ -154,7 +154,7 @@ class ReplayViewer:
                                     [(x, y - 31), (x + 24, y + 9), (x - 24, y + 9)])
             else:
                 pygame.draw.circle(self.screen, color, (x, y - 9), 23)
-            label = self.small.render(unit["army"][0] + unit["kind"][0].upper(),
+            label = self.small.render(unit_id.replace("-", ""),
                                       True, (18, 28, 36))
             self.screen.blit(label, label.get_rect(center=(x, y - 10)))
             if not unit["effective"]:
@@ -235,7 +235,8 @@ class ReplayViewer:
                   f"Attacks {stats['attacks']}   Holds {stats['holds']}   Retreats {stats['retreats']}",
                   PANEL_X + 22, 611)
         draw_text(self.screen, self.small,
-                  f"Damage {stats['damage_dealt']}   Survivors {stats['survivors']}/3",
+                  f"Damage {stats['damage_dealt']}   Survivors {stats['survivors']}/"
+                  f"{sum(u['army'] == record['agent_army'] for u in record['initial']['units'].values())}",
                   PANEL_X + 22, 639)
         if state["finished"]:
             result = terminal_caption(record, state)

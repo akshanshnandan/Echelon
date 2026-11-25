@@ -205,7 +205,7 @@ class LiveInterface:
                                     ((x, y - 31), (x + 24, y + 9), (x - 24, y + 9)))
             else:
                 pygame.draw.circle(self.screen, color, (x, y - 9), 23)
-            label = self.small.render(unit.army[0] + unit.kind[0].upper(),
+            label = self.small.render(unit.id.replace("-", ""),
                                       True, (18, 28, 36))
             self.screen.blit(label, label.get_rect(center=(x, y - 10)))
             if not unit.effective:
@@ -363,6 +363,15 @@ class LiveInterface:
         elif command == "save":
             self.save()
 
+    def handle_click(self, position):
+        """Dispatch one mouse click using the buttons from the latest frame."""
+        if self.click_board(position):
+            return
+        for rect, command in self.buttons:
+            if rect.collidepoint(position):
+                self.command(command)
+                return
+
     def run(self, screenshot: Path | None = None, smoke: bool = False,
             save_record: Path | None = None):
         if smoke:
@@ -421,11 +430,7 @@ class LiveInterface:
                     elif event.key == pygame.K_s:
                         self.command("save")
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if not self.click_board(event.pos):
-                        for rect, command in self.buttons:
-                            if rect.collidepoint(event.pos):
-                                self.command(command)
-                                break
+                    self.handle_click(event.pos)
             self.draw()
         pygame.quit()
 
