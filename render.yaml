@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: echelon-browser
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: ECHELON_MAX_SESSIONS
+        value: "256"
+      - key: ECHELON_SESSION_TTL
+        value: "3600"

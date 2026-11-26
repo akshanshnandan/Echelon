@@ -5,3 +5,5 @@ stable-baselines3==2.9.2
 sb3-contrib==2.9.2
 torch==2.15.0
 pygame-ce==2.5.8
+-r requirements-web.txt
+httpx==0.28.1  # FastAPI TestClient for web API regression tests
