@@ -12,6 +12,7 @@ Echelon is a Python research project in which human and AI generals command simp
 - **Research workflow:** Seeded mirrored deployments, separate training/development/final-test pools, checkpoint continuation, per-deployment evaluation, and verified JSON battle recording/replay.
 - **Visual replay:** A pygame-ce viewer shows formations, health, morale, movement, attacks, event logs, outcomes, and tactical counts. It reads saved records and does not simulate combat.
 - **Human vs AI:** A separate Pygame game lets you command Blue or Red against RandomGeneral, HeuristicGeneral, or a compatible saved MaskablePPO checkpoint. Only engine-legal destinations and targets are highlighted.
+- **Expanded army builder:** Draft one to four formations under gold and manpower limits, face a seeded AI doctrine, and save versioned battles that open in the replay viewer. Classic remains available unchanged.
 
 **Stack:** Python 3.14 (tested on Windows), Gymnasium, NumPy, Stable-Baselines3, sb3-contrib, PyTorch, and pygame-ce. Versions are pinned in [requirements.txt](requirements.txt). The battle engine and text simulator use only the Python standard library.
 
@@ -73,6 +74,19 @@ Click a friendly unit, choose an order with **1–4** or the buttons, and click 
 
 ![Live Human vs AI board with legal advance squares](docs/phase8_live.png)
 
+## Draft an Expanded army
+
+```powershell
+.\.venv\Scripts\python.exe -m echelon.army_builder
+.\.venv\Scripts\python.exe -m echelon.expanded_tournament --battles-per-pair 100 --seed 9000 --output runs/phase9_tournament.json
+```
+
+Choose **Classic** or **Expanded** in the builder. Expanded lets you recruit duplicate infantry, cavalry, or artillery under a **13,000 gold / 50 manpower / four formation** cap, choose your side and first move, and preview a Balanced, Cavalry, Artillery, or Infantry AI doctrine. Click **Start Battle** and use the same mouse controls as Phase 8. Press **M** to return to the builder after a battle. Classic PPO checkpoints work **only in Classic**, because their fixed observation and action encoding do not represent custom rosters. See the [Phase 9 guide](docs/phase9.md) for example builds, results, replay commands, and balance limitations.
+
+![Expanded army builder](docs/phase9_builder.png)
+
+![Expanded battle with duplicate cavalry formations](docs/phase9_battle.png)
+
 ## Train and evaluate
 
 The first experiment trains against `RandomGeneral` with sparse terminal rewards (+1 win, −1 loss, 0 draw). Actions are masked during training and inference.
@@ -114,7 +128,8 @@ The selected policy improved its final-test score against RandomGeneral by **6.4
 | `echelon/env.py`, `train.py`, `evaluate.py` | Gymnasium wrapper, masked PPO, paired evaluation |
 | `echelon/recording.py`, `replay_data.py`, `viewer.py` | Battle recording, validation, and visual playback |
 | `echelon/encoding.py`, `ppo_general.py`, `live_game.py`, `play.py` | Shared RL encoding, trained opponent adapter, live controller, and Human vs AI screen |
+| `echelon/drafting.py`, `doctrines.py`, `expanded*.py`, `army_builder.py` | Expanded roster rules, doctrine drafts, battles, tournaments, replay verification, and builder UI |
 | `echelon/export_comparison.py`, `final_test.py` | Matched replays and frozen final comparison |
 | `tests/`, `docs/`, `examples/` | Regression tests, research reports, sample replay |
 
-Possible future research and gameplay work includes army drafting, terrain, additional unit types, self-play, and comparisons with other AI algorithms. These features are not implemented yet.
+Possible future research and gameplay work includes terrain, additional unit types, learned drafting, self-play, and comparisons with other AI algorithms. These features are not implemented yet.

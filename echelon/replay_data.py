@@ -9,6 +9,9 @@ ACTIONS = {"HOLD", "ADVANCE", "ATTACK", "RETREAT"}
 
 def validate_record(record: dict) -> dict:
     """Check structure and snapshot continuity, not combat rules."""
+    if isinstance(record, dict) and record.get("version") == 2:
+        from .expanded_recording import verify
+        return verify(record)
     try:
         if not isinstance(record, dict) or not isinstance(record["decisions"], list):
             raise ValueError("A battle must be a JSON object with a decisions list")
