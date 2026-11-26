@@ -31,8 +31,10 @@ class CommandGame:
         for _ in range(count):
             self.general.decide(self.battle)
             self.battle.step()
-            if self.battle.tick % 100 == 0:
-                self.checkpoints.append({"tick": self.battle.tick, "state": self.battle.snapshot()})
+            if self.battle.tick % 20 == 0:
+                state = self.battle.snapshot()
+                state.pop("events")  # Events are stored once in the replay, not in every checkpoint.
+                self.checkpoints.append({"tick": self.battle.tick, "state": state})
             if self.battle.finished:
                 break
 

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from echelon.command_engine import CommandBattle, distance
 from echelon.command_game import CommandGame
 from echelon.command_recording import verify
+from echelon.web_api import sample_replay
 from echelon.web_api import app
 
 
@@ -101,6 +102,16 @@ class CommandTests(unittest.TestCase):
         record["final"]["units"]["B1"]["health"] -= 1
         with self.assertRaises(ValueError):
             verify(record)
+
+    def test_bundled_command_replay_has_seekable_checkpoints(self):
+        record = sample_replay("command")
+        self.assertTrue(verify(record))
+        self.assertGreater(len(record["checkpoints"]), 1)
+        self.assertTrue(all(b["tick"] - a["tick"] <= 20 for a, b in zip(record["checkpoints"], record["checkpoints"][1:])))
+        altered = json.loads(json.dumps(record))
+        altered["checkpoints"][0]["state"]["units"]["B1"]["x"] += 1
+        with self.assertRaisesRegex(ValueError, "checkpoint"):
+            verify(altered)
 
     def test_clock_pause_speed_and_recording(self):
         clock = FakeClock()

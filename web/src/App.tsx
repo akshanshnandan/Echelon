@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { Battlefield } from "./Battlefield";
 import { CommandView, createCommand } from "./CommandView";
 import type { CommandGame } from "./CommandView";
+import { CommandReplayView } from "./CommandReplayView";
+import { validateCommandReplay } from "./commandReplay";
+import type { CommandReplay } from "./commandReplay";
+import { LandingBattle } from "./LandingBattle";
 import {
+  commandSampleReplay,
   createGame,
   getConfig,
   getReplay,
@@ -38,6 +43,7 @@ export default function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [mode, setMode] = useState<OrderKind>("ADVANCE");
   const [replay, setReplay] = useState<Replay | null>(null);
+  const [commandReplay, setCommandReplay] = useState<CommandReplay | null>(null);
   const [replayIndex, setReplayIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -148,6 +154,7 @@ export default function App() {
     setError("");
     try {
       setReplay(validateReplay(await sampleReplay(ruleset)));
+      setCommandReplay(null);
       setReplayIndex(0);
       setPlaying(false);
       setView("replay");
@@ -160,8 +167,15 @@ export default function App() {
     if (!upload) return;
     setError("");
     try {
-      if (upload.size > 3_000_000) throw new Error("Replay exceeds 3 MB");
-      setReplay(validateReplay(JSON.parse(await upload.text())));
+      if (upload.size > 6_000_000) throw new Error("Replay exceeds 6 MB");
+      const value = JSON.parse(await upload.text());
+      if (value?.version === 3 && value?.ruleset === "Command") {
+        setCommandReplay(validateCommandReplay(value));
+        setReplay(null);
+      } else {
+        setReplay(validateReplay(value));
+        setCommandReplay(null);
+      }
       setReplayIndex(0);
       setPlaying(false);
     } catch (e) {
@@ -228,7 +242,7 @@ export default function App() {
           <section className="hero">
             <div className="hero-copy">
               <div className="eyebrow">
-                <span className="live-indicator" /> A TACTICAL AI LABORATORY
+                <span className="live-indicator" /> A HISTORICAL STRATEGY GAME
               </div>
               <h1>
                 Command the line.
@@ -236,9 +250,8 @@ export default function App() {
                 <em>Change the outcome.</em>
               </h1>
               <p>
-                Build your army, read the battlefield, and face programmed
-                generals in a strategy game shaped by reinforcement learning
-                research.
+                Direct formations in real time, build a custom army, or play the
+                deterministic battle that began Echelon's AI research.
               </p>
               <div className="hero-actions">
                 <button
@@ -269,6 +282,7 @@ export default function App() {
                 </div>
               </div>
             </div>
+            <LandingBattle onPlay={() => setView("play")} />
             <div className="hero-visual" aria-label="Battlefield preview">
               <div className="visual-top">
                 <span>FIELD REPORT / 001</span>
@@ -299,6 +313,11 @@ export default function App() {
                 <span className="gold-text">● ENGAGEMENT IN PROGRESS</span>
               </div>
             </div>
+          </section>
+          <section className="mode-ledger" aria-label="Game modes">
+            <div><span>01 / COMMAND</span><h2>Real-time warfare</h2><p>Move formations together, seize the center, and pause to read the field.</p></div>
+            <div><span>02 / EXPANDED</span><h2>Draft your army</h2><p>Spend gold and manpower on the force you want to lead.</p></div>
+            <div><span>03 / CLASSIC</span><h2>The original campaign</h2><p>Play the exact turn-based rules behind Echelon's AI research.</p></div>
           </section>
           <section className="feature-strip">
             <div>
@@ -345,7 +364,7 @@ export default function App() {
               </div>
             )
           ) : commandGame ? (
-            <CommandView initial={commandGame} onNew={newBattle} />
+            <CommandView initial={commandGame} onNew={newBattle} onReplay={(record) => {setCommandReplay(validateCommandReplay(record));setReplay(null);setView("replay");}} />
           ) : game ? (
             <div className="game-view page-enter">
               <div className="battle-header">
@@ -527,6 +546,7 @@ export default function App() {
             <div className="section-number">03 / REPLAY</div>
           </div>
           <div className="replay-toolbar">
+            <button onClick={() => {setError("");void commandSampleReplay().then((record) => {setCommandReplay(validateCommandReplay(record));setReplay(null);}).catch((e) => setError(e.message));}}>Open Command sample</button>
             <button onClick={() => void loadSample("classic")}>
               Open Classic sample
             </button>
@@ -549,7 +569,7 @@ export default function App() {
               {error}
             </p>
           )}
-          {replay ? (
+          {commandReplay ? <CommandReplayView record={commandReplay} /> : replay ? (
             <div className="replay-layout">
               <section className="panel board-panel">
                 <div className="board-topline">

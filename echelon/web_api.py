@@ -268,9 +268,11 @@ def export_replay(key: str):
 
 
 @app.get("/api/replays/sample/{ruleset}")
-def sample_replay(ruleset: Literal["classic", "expanded"]):
+def sample_replay(ruleset: Literal["classic", "expanded", "command"]):
     if ruleset == "classic":
         return json.loads((ROOT / "examples" / "sample_battle.json").read_text(encoding="utf-8"))
+    if ruleset == "command":
+        return json.loads((ROOT / "examples" / "sample_command.json").read_text(encoding="utf-8"))
     from .expanded_game import ai_battle
     return ai_battle(("cavalry", "cavalry", "cavalry", "infantry"),
                      ("infantry", "infantry", "cavalry", "artillery"), 42)

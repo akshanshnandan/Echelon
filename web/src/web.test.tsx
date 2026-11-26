@@ -9,6 +9,7 @@ import {
 import { Battlefield } from "./Battlefield";
 import { Setup } from "./Setup";
 import { replaySnapshot, validateReplay } from "./replay";
+import { commandStateAt, validateCommandReplay } from "./commandReplay";
 import type { Config, Order, Snapshot } from "./types";
 
 const config: Config = {
@@ -223,5 +224,48 @@ describe("replay snapshots", () => {
     expect(() => validateReplay({ ...record, initial: final })).toThrow(
       "continuity",
     );
+  });
+});
+
+describe("Command replay checkpoints", () => {
+  const unit = (id: string, army: "Blue" | "Red", x: number) => ({
+    id, army, kind: "infantry", x, y: army === "Blue" ? 300 : 500,
+    heading: 0, width: 60, health: 100, morale: 100, effective: true,
+    order: "HOLD", destination: null, waypoints: [],
+  });
+  const state = (tick: number, offset: number, finished = false) => ({
+    tick, time: tick / 10, map: "open_field", finished,
+    winner: finished ? "Blue" : null, reason: finished ? "objective" : null,
+    objective: {Blue: 0, Red: 0}, events: [],
+    units: {
+      B1: unit("B1", "Blue", 100 + offset),
+      B2: unit("B2", "Blue", 200 + offset),
+      R1: unit("R1", "Red", 900 - offset),
+      R2: unit("R2", "Red", 1000 - offset),
+    },
+  });
+  const sampleCommand = {
+    version: 3, ruleset: "Command", seed: 1, map: "open_field",
+    roster: ["infantry", "infantry"], human_army: "Blue", opponent: "balanced",
+    initial: state(0, 0), final: state(120, 100, true), commands: [], events: [],
+    checkpoints: [
+      {tick: 20, state: state(20, 20)},
+      {tick: 60, state: state(60, 50)},
+    ],
+  };
+  it("loads a version 3 recording and seeks through saved positions", () => {
+    const record = validateCommandReplay(sampleCommand);
+    expect(record.checkpoints.length).toBeGreaterThan(1);
+    expect(commandStateAt(record, 0).units.B1.x).toBe(record.initial.units.B1.x);
+    expect(commandStateAt(record, record.final.tick).units.B1.x).toBe(record.final.units.B1.x);
+    const mid = commandStateAt(record, record.checkpoints[0].tick / 2);
+    expect(mid.units.B1.x).toBeGreaterThanOrEqual(0);
+    expect(mid.units.B1.x).toBeLessThanOrEqual(1200);
+  });
+  it("rejects truncated, malformed, and out-of-order recordings", () => {
+    expect(() => validateCommandReplay({...sampleCommand,final:undefined})).toThrow("final");
+    expect(() => validateCommandReplay({...sampleCommand,checkpoints:[]})).toThrow("checkpoint");
+    expect(() => validateCommandReplay({...sampleCommand,checkpoints:[...sampleCommand.checkpoints].reverse()})).toThrow("checkpoint");
+    expect(() => validateCommandReplay({...sampleCommand,events:[{tick:-1,type:"hit"}]})).toThrow("event");
   });
 });

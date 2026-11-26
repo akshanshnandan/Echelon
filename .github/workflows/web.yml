@@ -1,7 +1,7 @@
 name: Browser edition
 on:
   push:
-    branches: [main, feat/web-platform, feat/real-time-warfare]
+    branches: [main, feat/web-platform, feat/real-time-warfare, feat/visual-overhaul]
   pull_request:
     paths:
       - 'echelon/**'
