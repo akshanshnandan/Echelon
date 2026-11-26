@@ -118,7 +118,8 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(self.client.get(f"/api/games/{old['id']}").status_code, 404)
         self.assertEqual(self.client.get(f"/api/games/{new['id']}").status_code, 200)
         game, _ = web_api.sessions.sessions[new['id']]
-        web_api.sessions.sessions[new['id']] = (game, 0)
+        expired_at = web_api.time.monotonic() - web_api.sessions.ttl - 1
+        web_api.sessions.sessions[new['id']] = (game, expired_at)
         self.assertEqual(self.client.get(f"/api/games/{new['id']}").status_code, 404)
 
 
