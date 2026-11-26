@@ -4,10 +4,7 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
-import numpy as np
-
 from .engine import apply_order, legal_orders, new_battle, score
-from .env import EchelonEnv
 from .generals import HeuristicGeneral
 from .model import Order, OrderType
 from .scenarios import SIDE_FIRST, scenario_seed
@@ -52,6 +49,8 @@ def decision_record(before, order, after, message, legal_count=None):
 def record_battle(policy, opponent: str, seed: int, side: str, first: str,
                   deployment: str = "random") -> dict:
     """Policy is a loaded MaskablePPO model or a fresh HeuristicGeneral."""
+    import numpy as np
+    from .env import EchelonEnv
     env = EchelonEnv(opponent=opponent, deployment=deployment)
     decisions = []
     initial = None

@@ -1,6 +1,6 @@
 # Echelon
 
-Echelon is a Python research project in which human and AI generals command simplified Napoleonic armies. A deterministic 8×8 battle engine supports rule-based commanders and a Gymnasium environment for masked reinforcement learning. The project includes reproducible evaluations, a playable Human vs AI interface, and a read-only visual replay viewer.
+Echelon is a Python research project and browser-playable tactical strategy game in which human and AI generals command simplified Napoleonic armies. A deterministic 8×8 battle engine supports rule-based commanders and a Gymnasium environment for masked reinforcement learning. The project includes reproducible evaluations, Classic and Expanded human gameplay, and verified battle replays.
 
 ![Echelon battle replay viewer](docs/phase7_result.png)
 
@@ -13,6 +13,7 @@ Echelon is a Python research project in which human and AI generals command simp
 - **Visual replay:** A pygame-ce viewer shows formations, health, morale, movement, attacks, event logs, outcomes, and tactical counts. It reads saved records and does not simulate combat.
 - **Human vs AI:** A separate Pygame game lets you command Blue or Red against RandomGeneral, HeuristicGeneral, or a compatible saved MaskablePPO checkpoint. Only engine-legal destinations and targets are highlighted.
 - **Expanded army builder:** Draft one to four formations under gold and manpower limits, face a seeded AI doctrine, and save versioned battles that open in the replay viewer. Classic remains available unchanged.
+- **Browser edition:** React and TypeScript render a responsive battlefield and army builder. FastAPI calls the existing Python battle controllers, serves the built site and API from one origin, and holds bounded, expiring game sessions.
 
 **Stack:** Python 3.14 (tested on Windows), Gymnasium, NumPy, Stable-Baselines3, sb3-contrib, PyTorch, and pygame-ce. Versions are pinned in [requirements.txt](requirements.txt). The battle engine and text simulator use only the Python standard library.
 
@@ -27,6 +28,28 @@ py -3.14 -m venv .venv
 ```
 
 If Python 3.14 is already the `py` default, `py -m venv .venv` also works. Using `.\.venv\Scripts\python.exe` avoids PowerShell activation policy issues.
+
+## Play in a browser locally
+
+The lightweight web install excludes the ML and Pygame packages. Build once, then run the API and site from the same origin:
+
+```powershell
+py -3.14 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-web.txt
+cd web
+npm ci
+npm run build
+cd ..
+.\.venv\Scripts\python.exe -m uvicorn echelon.web_api:app --host 127.0.0.1 --port 8000
+```
+
+Open **http://127.0.0.1:8000**. Classic offers RandomGeneral and HeuristicGeneral; Expanded offers the four programmed drafting doctrines. The public web build does not include a PPO checkpoint. The [browser edition guide](docs/phase10_web.md) explains the REST API, tests, session limits, and Render deployment. **The browser game is not publicly deployed yet.**
+
+![Echelon browser landing page](docs/phase10_landing.png)
+
+![Expanded web army builder](docs/phase10_draft.png)
+
+![Classic browser battlefield](docs/phase10_classic_battle.png)
 
 ## Simulate a battle
 
@@ -129,6 +152,8 @@ The selected policy improved its final-test score against RandomGeneral by **6.4
 | `echelon/recording.py`, `replay_data.py`, `viewer.py` | Battle recording, validation, and visual playback |
 | `echelon/encoding.py`, `ppo_general.py`, `live_game.py`, `play.py` | Shared RL encoding, trained opponent adapter, live controller, and Human vs AI screen |
 | `echelon/drafting.py`, `doctrines.py`, `expanded*.py`, `army_builder.py` | Expanded roster rules, doctrine drafts, battles, tournaments, replay verification, and builder UI |
+| `echelon/web_api.py`, `web/` | Lightweight FastAPI sessions and React/TypeScript browser interface |
+| `Dockerfile`, `render.yaml`, `.github/workflows/web.yml` | Single-service build, Render example, and automated web checks |
 | `echelon/export_comparison.py`, `final_test.py` | Matched replays and frozen final comparison |
 | `tests/`, `docs/`, `examples/` | Regression tests, research reports, sample replay |
 
