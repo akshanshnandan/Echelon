@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Battlefield } from "./Battlefield";
+import { CommandView, createCommand } from "./CommandView";
+import type { CommandGame } from "./CommandView";
 import {
   createGame,
   getConfig,
@@ -29,6 +31,7 @@ export default function App() {
   const [view, setView] = useState<View>("home");
   const [config, setConfig] = useState<Config | null>(null);
   const [game, setGame] = useState<Game | null>(null);
+  const [commandGame, setCommandGame] = useState<CommandGame | null>(null);
   const [setup, setSetup] = useState<SetupState>(initialSetup);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -65,7 +68,16 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
-      const created = await createGame(next);
+      if (next.ruleset === "Command") {
+        const created = await createCommand({human_army: next.human_army, opponent: next.opponent, map: next.map, seed: next.seed});
+        setCommandGame(created);
+        setGame(null);
+        setSetup(next);
+        return;
+      }
+      const { map: _map, ...legacySetup } = next;
+      const created = await createGame(legacySetup);
+      setCommandGame(null);
       setSetup(next);
       setGame(created);
       setSelected(null);
@@ -110,6 +122,7 @@ export default function App() {
   }
   function newBattle() {
     setGame(null);
+    setCommandGame(null);
     setSelected(null);
     setView("play");
   }
@@ -317,7 +330,7 @@ export default function App() {
 
       {view === "play" && (
         <main className="content-wrap">
-          {!game ? (
+          {!game && !commandGame ? (
             config ? (
               <Setup
                 config={config}
@@ -331,7 +344,9 @@ export default function App() {
                 {error || "Preparing command center…"}
               </div>
             )
-          ) : (
+          ) : commandGame ? (
+            <CommandView initial={commandGame} onNew={newBattle} />
+          ) : game ? (
             <div className="game-view page-enter">
               <div className="battle-header">
                 <div>
@@ -494,7 +509,7 @@ export default function App() {
                 </aside>
               </div>
             </div>
-          )}
+          ) : null}
         </main>
       )}
 

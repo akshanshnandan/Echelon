@@ -21,6 +21,8 @@ from .expanded_game import ExpandedGame
 from .live_game import LiveGame
 from .model import Order, OrderType
 from .recording import state_snapshot
+from .command_game import CommandGame
+from .command_engine import MAPS
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -65,6 +67,26 @@ class PurchaseRequest(StrictModel):
 class RemoveRequest(StrictModel):
     roster: list[Literal["infantry", "cavalry", "artillery"]] = Field(max_length=RULES.maximum)
     index: int = Field(ge=0, le=RULES.maximum - 1)
+
+
+class CommandRequest(StrictModel):
+    human_army: Literal["Blue", "Red"] = "Blue"
+    opponent: Literal["balanced", "aggressive", "defensive"] = "balanced"
+    map: Literal["open_field", "ridge_forest"] = "open_field"
+    seed: int = Field(default=42, ge=0, le=2_147_483_647)
+    roster: list[Literal["infantry", "cavalry", "artillery"]] | None = Field(default=None, min_length=2, max_length=8)
+
+
+class CommandOrderRequest(StrictModel):
+    ids: list[str] = Field(min_length=1, max_length=8)
+    kind: Literal["MOVE", "ATTACK", "HOLD", "DEFEND", "RETREAT", "STOP"]
+    target: tuple[float, float] | str | None = None
+    waypoints: list[tuple[float, float]] = Field(default_factory=list, max_length=6)
+
+
+class CommandControlRequest(StrictModel):
+    paused: bool | None = None
+    speed: Literal[0.5, 1.0, 2.0, 4.0] | None = None
 
 
 class SessionStore:
@@ -150,6 +172,7 @@ def health():
 @app.get("/api/config")
 def config():
     return {"board_size": 8, "max_rounds": 30,
+            "command_maps": list(MAPS),
             "classic_opponents": ["random", "heuristic"] + (["ppo"] if ppo_ready() else []),
             "expanded_opponents": list(WEIGHTS),
             "draft": {"gold": RULES.gold, "manpower": RULES.manpower,
@@ -251,6 +274,64 @@ def sample_replay(ruleset: Literal["classic", "expanded"]):
     from .expanded_game import ai_battle
     return ai_battle(("cavalry", "cavalry", "cavalry", "infantry"),
                      ("infantry", "infantry", "cavalry", "artillery"), 42)
+
+
+def command_state(game, key):
+    return {"id": key, **game.state()}
+
+
+@app.post("/api/command", status_code=201)
+def create_command(request: CommandRequest):
+    try:
+        game = CommandGame(request.human_army, request.opponent, request.map, request.seed, request.roster)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    key = sessions.create(game)
+    return command_state(game, key)
+
+
+def command_session(key):
+    game = sessions.get(key)
+    if not isinstance(game, CommandGame):
+        raise HTTPException(404, "Command session not found")
+    return game
+
+
+@app.get("/api/command/{key}")
+def get_command(key: str):
+    with sessions.lock:
+        return command_state(command_session(key), key)
+
+
+@app.post("/api/command/{key}/orders")
+def submit_command(key: str, request: CommandOrderRequest):
+    with sessions.lock:
+        game = command_session(key)
+        try:
+            game.order(request.ids, request.kind, request.target, request.waypoints)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return command_state(game, key)
+
+
+@app.post("/api/command/{key}/control")
+def control_command(key: str, request: CommandControlRequest):
+    with sessions.lock:
+        game = command_session(key)
+        try:
+            game.control(request.paused, request.speed)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return command_state(game, key)
+
+
+@app.get("/api/command/{key}/replay")
+def command_replay(key: str):
+    with sessions.lock:
+        game = command_session(key)
+        if not game.battle.finished:
+            raise HTTPException(409, "Finish the battle before exporting its replay")
+        return game.recording()
 
 
 if DIST.is_dir():

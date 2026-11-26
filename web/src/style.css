@@ -1223,3 +1223,25 @@ footer .brand-mark {
     padding: 18px;
   }
 }
+.command-view { padding: 2rem 0 4rem; color: #eee8d8; }
+.command-heading, .command-controls { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.command-heading h1 { margin: .4rem 0; }
+.command-controls { justify-content: flex-start; }
+.command-controls button, .command-controls select, .command-buttons button, .command-victory button { background: #24394a; color: #f4eacb; border: 1px solid #77745f; border-radius: 4px; padding: .6rem .9rem; cursor: pointer; }
+.command-layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 1rem; }
+.command-field { background: #242c25; border: 2px solid #8d7c59; border-radius: 8px; overflow: hidden; }
+.command-field svg { display: block; width: 100%; aspect-ratio: 3 / 2; touch-action: manipulation; }
+.command-panel { background: #1c2934; border: 1px solid #56616a; border-radius: 8px; padding: 1rem; max-height: 800px; overflow: auto; }
+.command-panel h2 { margin-top: 0; }
+.command-panel h3 { margin: 1.5rem 0 .5rem; }
+.command-panel p { line-height: 1.5; }
+.command-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: .3rem; }
+.command-buttons button { font-size: .75rem; padding: .55rem .15rem; }
+.command-buttons button.active { background: #a67a3c; color: white; }
+.command-unit { display: flex; flex-direction: column; border-top: 1px solid #52606b; padding: .5rem 0; gap: .3rem; }
+.command-unit span { font-size: .8rem; }
+.command-events { font-size: .8rem; }
+.command-events p { margin: .2rem 0; }
+.command-victory { margin-top: 1rem; padding: 1.5rem; border: 2px solid #d4b76c; background: #233541; border-radius: 8px; }
+.command-victory button { margin-right: .5rem; }
+@media (max-width: 850px) { .command-layout { grid-template-columns: 1fr; } .command-panel { max-height: none; } .command-view { padding: 1rem 0 3rem; } }
