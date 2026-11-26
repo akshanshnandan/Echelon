@@ -3,7 +3,8 @@ import { previewDraft } from "./api";
 import type { Army, Config, Kind } from "./types";
 
 export type SetupState = {
-  ruleset: "Classic" | "Expanded";
+  ruleset: "Classic" | "Expanded" | "Command";
+  map: "open_field" | "ridge_forest";
   human_army: Army;
   opponent: string;
   first_army: Army;
@@ -14,6 +15,7 @@ export type SetupState = {
 
 export const initialSetup: SetupState = {
   ruleset: "Classic",
+  map: "open_field",
   human_army: "Blue",
   opponent: "heuristic",
   first_army: "Blue",
@@ -62,7 +64,7 @@ export function Setup({
     };
   }, [roster, setup.ruleset, setup.opponent, setup.human_army, setup.seed]);
 
-  function mode(value: "Classic" | "Expanded") {
+  function mode(value: "Classic" | "Expanded" | "Command") {
     setSetup({
       ...setup,
       ruleset: value,
@@ -112,7 +114,7 @@ export function Setup({
             <h2>Rules of engagement</h2>
           </div>
           <div className="segmented" role="group" aria-label="Ruleset">
-            {(["Classic", "Expanded"] as const).map((value) => (
+            {(["Classic", "Expanded", "Command"] as const).map((value) => (
               <button
                 key={value}
                 className={setup.ruleset === value ? "active" : ""}
@@ -122,12 +124,19 @@ export function Setup({
                 <small>
                   {value === "Classic"
                     ? "Original three formations"
-                    : "Draft your own army"}
+                    : value === "Expanded" ? "Draft your own army" : "Real-time battlefield"}
                 </small>
               </button>
             ))}
           </div>
           <div className="field-grid">
+            {setup.ruleset === "Command" && <label>
+              Battlefield
+              <select aria-label="Battlefield map" value={setup.map} onChange={(e) => setSetup({ ...setup, map: e.target.value as SetupState["map"] })}>
+                <option value="open_field">Open Field</option>
+                <option value="ridge_forest">Ridge and Forest</option>
+              </select>
+            </label>}
             <label>
               Your army
               <select
@@ -141,7 +150,7 @@ export function Setup({
                 <option>Red</option>
               </select>
             </label>
-            <label>
+            {setup.ruleset !== "Command" && <label>
               First move
               <select
                 aria-label="First move"
@@ -153,7 +162,7 @@ export function Setup({
                 <option>Blue</option>
                 <option>Red</option>
               </select>
-            </label>
+            </label>}
             <label>
               Opponent
               <select
@@ -165,7 +174,7 @@ export function Setup({
               >
                 {(setup.ruleset === "Classic"
                   ? config.classic_opponents
-                  : config.expanded_opponents
+                  : setup.ruleset === "Command" ? ["balanced", "aggressive", "defensive"] : config.expanded_opponents
                 ).map((name) => (
                   <option key={name} value={name}>
                     {name === "ppo"
@@ -175,7 +184,7 @@ export function Setup({
                 ))}
               </select>
             </label>
-            <label>
+            {setup.ruleset !== "Command" && <label>
               Deployment
               <select
                 aria-label="Deployment"
@@ -191,7 +200,7 @@ export function Setup({
                 <option value="fixed">Fixed</option>
                 <option value="random">Seeded random</option>
               </select>
-            </label>
+            </label>}
             <label>
               Battle seed
               <input
@@ -214,9 +223,7 @@ export function Setup({
           <div className="panel-title">
             <span className="panel-index">02</span>
             <h2>
-              {setup.ruleset === "Expanded"
-                ? "Assemble your army"
-                : "Classic formation"}
+              {setup.ruleset === "Expanded" ? "Assemble your army" : setup.ruleset === "Command" ? "Command formation" : "Classic formation"}
             </h2>
           </div>
           {setup.ruleset === "Expanded" ? (
@@ -298,13 +305,12 @@ export function Setup({
             </>
           ) : (
             <div className="classic-roster">
-              <p>Two equal armies. Three formations each.</p>
+              <p>{setup.ruleset === "Command" ? "Four formations per side move and fight simultaneously." : "Two equal armies. Three formations each."}</p>
               <div>
                 INFANTRY <span>·</span> CAVALRY <span>·</span> ARTILLERY
               </div>
               <small>
-                Classic keeps the original research rules and checkpoint
-                encoding intact.
+                {setup.ruleset === "Command" ? "Issue persistent orders while battle time advances." : "Classic keeps the original research rules and checkpoint encoding intact."}
               </small>
             </div>
           )}
