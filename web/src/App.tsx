@@ -6,11 +6,13 @@ import { CommandReplayView } from "./CommandReplayView";
 import { validateCommandReplay } from "./commandReplay";
 import type { CommandReplay } from "./commandReplay";
 import { LandingBattle } from "./LandingBattle";
+import { analyticsBlocked, analyticsConsent, configureAnalytics, setAnalyticsConsent, track, trackCompletion, trackError } from "./analytics";
 import {
   commandSampleReplay,
   createGame,
   getConfig,
   getReplay,
+  sendFeedback,
   sampleReplay,
   submitOrder,
 } from "./api";
@@ -40,6 +42,16 @@ export default function App() {
   const [setup, setSetup] = useState<SetupState>(initialSetup);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [expiredGame, setExpiredGame] = useState(false);
+  const [consent, setConsent] = useState<"on" | "off" | null>(analyticsConsent);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackStatus, setFeedbackStatus] = useState("");
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [rating, setRating] = useState(3);
+  const [category, setCategory] = useState("gameplay");
+  const visited = useRef<View | null>(null);
+  const battleStarted = useRef(new Map<string, number>());
   const [selected, setSelected] = useState<string | null>(null);
   const [mode, setMode] = useState<OrderKind>("ADVANCE");
   const [replay, setReplay] = useState<Replay | null>(null);
@@ -51,9 +63,29 @@ export default function App() {
 
   useEffect(() => {
     getConfig()
-      .then(setConfig)
+      .then((next) => {setConfig(next); if (next.analytics) configureAnalytics(next.analytics);})
       .catch((e) => setError(e.message));
   }, []);
+  useEffect(() => {
+    if (!config || visited.current === view) return;
+    visited.current = view;
+    void track("page_view", {page:view});
+    if (view === "play") void track("play_opened");
+  }, [config, view]);
+
+  function chooseAnalytics(enabled: boolean) {
+    if (enabled && analyticsBlocked()) return;
+    setAnalyticsConsent(enabled);
+    setConsent(enabled ? "on" : "off");
+  }
+
+  async function feedback() {
+    setFeedbackBusy(true);
+    setFeedbackStatus("");
+    try { await sendFeedback(rating,category); setFeedbackStatus("Thanks. Your rating was received."); }
+    catch (e) { setFeedbackStatus((e as Error).message); trackError("feedback","network"); }
+    finally { setFeedbackBusy(false); }
+  }
   useEffect(() => {
     if (!playing || !replay) return;
     const timer = window.setInterval(
@@ -73,9 +105,12 @@ export default function App() {
   async function start(next: SetupState) {
     setBusy(true);
     setError("");
+    setExpiredGame(false);
     try {
       if (next.ruleset === "Command") {
         const created = await createCommand({human_army: next.human_army, opponent: next.opponent, map: next.map, seed: next.seed});
+        battleStarted.current.set(created.id, performance.now());
+        void track("battle_started", {mode:"Command",map:next.map,opponent:next.opponent});
         setCommandGame(created);
         setGame(null);
         setSetup(next);
@@ -83,6 +118,8 @@ export default function App() {
       }
       const { map: _map, ...legacySetup } = next;
       const created = await createGame(legacySetup);
+      battleStarted.current.set(created.id, performance.now());
+      void track("battle_started", {mode:created.ruleset,opponent:created.opponent});
       setCommandGame(null);
       setSetup(next);
       setGame(created);
@@ -90,19 +127,27 @@ export default function App() {
       setMode("ADVANCE");
     } catch (e) {
       setError((e as Error).message);
+      trackError("setup","rejected");
     } finally {
       setBusy(false);
     }
   }
   async function order(chosen: Order) {
-    if (!game || busy) return;
+    if (!game || busy || expiredGame || game.state.finished) return;
     setBusy(true);
     setError("");
     try {
-      setGame(await submitOrder(game.id, chosen));
+      const updated = await submitOrder(game.id, chosen);
+      setGame(updated);
+      if (updated.state.finished) trackCompletion(updated.id, {mode:updated.ruleset,opponent:updated.opponent,
+        duration_seconds:Math.round((performance.now()-(battleStarted.current.get(updated.id) ?? performance.now()))/1000),
+        winner:updated.state.winner ?? "draw"});
       setSelected(null);
     } catch (e) {
       setError((e as Error).message);
+      const expired=(e as Error).message.startsWith("Game session expired");
+      if (expired) setExpiredGame(true);
+      trackError("order",expired?"expired":"rejected");
     } finally {
       setBusy(false);
     }
@@ -130,12 +175,14 @@ export default function App() {
     setGame(null);
     setCommandGame(null);
     setSelected(null);
+    setExpiredGame(false);
     setView("play");
   }
   async function download() {
     if (!game) return;
     try {
       const record = await getReplay(game.id);
+      void track("replay_downloaded", {mode:game.ruleset});
       const url = URL.createObjectURL(
         new Blob([JSON.stringify(record, null, 2)], {
           type: "application/json",
@@ -148,6 +195,9 @@ export default function App() {
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
       setError((e as Error).message);
+      const expired=(e as Error).message.startsWith("Game session expired");
+      if (expired) setExpiredGame(true);
+      trackError("replay",expired?"expired":"network");
     }
   }
   async function loadSample(ruleset: "classic" | "expanded") {
@@ -160,6 +210,7 @@ export default function App() {
       setView("replay");
     } catch (e) {
       setError((e as Error).message);
+      trackError("replay","network");
     }
   }
   async function upload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -180,6 +231,7 @@ export default function App() {
       setPlaying(false);
     } catch (e) {
       setError((e as Error).message);
+      trackError("replay","rejected");
     }
     event.target.value = "";
   }
@@ -492,9 +544,7 @@ export default function App() {
                       </>
                     )}
                     {error && (
-                      <p className="form-error" role="alert">
-                        {error}
-                      </p>
+                      <p className="form-error" role="alert">{error} {expiredGame && <button onClick={newBattle}>New battle</button>}</p>
                     )}
                   </section>
                   <section className="panel log-panel">
@@ -546,7 +596,7 @@ export default function App() {
             <div className="section-number">03 / REPLAY</div>
           </div>
           <div className="replay-toolbar">
-            <button onClick={() => {setError("");void commandSampleReplay().then((record) => {setCommandReplay(validateCommandReplay(record));setReplay(null);}).catch((e) => setError(e.message));}}>Open Command sample</button>
+            <button onClick={() => {setError("");void commandSampleReplay().then((record) => {setCommandReplay(validateCommandReplay(record));setReplay(null);}).catch((e) => {setError(e.message);trackError("replay","network");});}}>Open Command sample</button>
             <button onClick={() => void loadSample("classic")}>
               Open Classic sample
             </button>
@@ -763,10 +813,35 @@ export default function App() {
         </main>
       )}
 
+      {consent === null && !!config?.analytics?.token && <section className="beta-notice" aria-label="Analytics choice">
+        <p>Optional usage analytics help improve the beta. Analytics stay off until you choose. No accounts, session recordings, or automatic click tracking.</p>
+        <button onClick={() => chooseAnalytics(true)}>Enable analytics</button>
+        <button onClick={() => chooseAnalytics(false)}>Keep off</button>
+        <button onClick={() => setPrivacyOpen(true)}>Privacy details</button>
+      </section>}
+      {privacyOpen && <section className="beta-panel" aria-label="Privacy notice">
+        <h2>Privacy notice</h2>
+        <p>Echelon works without an account. Optional PostHog analytics record only named page and game events, mode, map, opponent, battle duration, result, replay downloads, and broad error categories. We do not send game IDs, seeds, orders, typed text, or raw errors. PostHog receives network metadata when events are delivered; location enrichment is disabled. Automatic capture, session replay, and person profiles are disabled. Analytics remain off by default. Your browser's Global Privacy Control or Do Not Track signal keeps them off.</p>
+        <p>Game sessions live temporarily in server memory. Optional feedback sends only a rating and fixed category to server logs. The hosting provider may process request metadata under its own retention settings. You can change your analytics choice here at any time.</p>
+        <button disabled={analyticsBlocked() || !config?.analytics?.token} onClick={() => chooseAnalytics(true)}>Enable analytics</button>
+        <button onClick={() => chooseAnalytics(false)}>Turn analytics off</button>
+        <span role="status">Analytics: {!config?.analytics?.token ? "unavailable" : consent === "on" ? "on" : "off"}{analyticsBlocked() ? " (browser privacy signal)" : ""}</span>
+        <button onClick={() => setPrivacyOpen(false)}>Close</button>
+      </section>}
+      {feedbackOpen && <section className="beta-panel" aria-label="Player feedback">
+        <h2>Beta feedback</h2><p>No account or written response needed. Choose a rating and topic.</p>
+        <label>Rating <select aria-label="Feedback rating" value={rating} onChange={(e) => setRating(Number(e.target.value))}>{[1,2,3,4,5].map((n) => <option key={n} value={n}>{n} / 5</option>)}</select></label>
+        <label>Topic <select aria-label="Feedback topic" value={category} onChange={(e) => setCategory(e.target.value)}>{["gameplay","controls","performance","bug","other"].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <button disabled={feedbackBusy} onClick={() => void feedback()}>{feedbackBusy ? "Sending…" : "Send feedback"}</button>
+        <button onClick={() => setFeedbackOpen(false)}>Close</button>
+        {feedbackStatus && <p role="status">{feedbackStatus}</p>}
+      </section>}
       <footer>
         <span>{brand()}</span>
         <span>COMMAND · OBSERVE · LEARN</span>
         <span>Built from deterministic Python battle rules</span>
+        <button onClick={() => setPrivacyOpen(true)}>Privacy and analytics</button>
+        <button onClick={() => {setFeedbackStatus("");setFeedbackOpen(true);}}>Give feedback</button>
       </footer>
     </div>
   );

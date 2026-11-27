@@ -72,6 +72,7 @@ export type UnitInfo = {
 export type Config = {
   board_size: number;
   max_rounds: number;
+  analytics?: {token: string; host: string};
   classic_opponents: string[];
   expanded_opponents: string[];
   draft: {

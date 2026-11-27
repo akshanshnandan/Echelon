@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CommandBattlefield } from "./CommandBattlefield";
 import type { CommandEvent, CommandState, CommandUnit } from "./CommandBattlefield";
+import { track, trackCompletion, trackError } from "./analytics";
 
 export type CommandGame = {
   id: string; ruleset: "Command"; human_army: "Blue" | "Red"; opponent: string;
@@ -53,11 +54,15 @@ export function CommandView({ initial, onNew, onReplay }: {
   const busy = useRef(false);
   const seenEvents = useRef(new Set<string>());
   const effectTimer = useRef<number | undefined>(undefined);
+  const startedAt = useRef(performance.now());
+  const pollErrorReported = useRef(false);
 
   function apply(next: CommandGame, number: number) {
     if (number < applied.current) return;
     applied.current = number;
     setGame(next);
+    if (next.battle.finished) trackCompletion(next.id, {mode:"Command",map:next.battle.map,opponent:next.opponent,
+      duration_seconds:Math.round((performance.now()-startedAt.current)/1000),winner:next.battle.winner ?? "draw"});
     const fresh = next.battle.events.filter((event) => {
       const key = `${event.tick}:${event.type}:${event.unit}:${event.target}:${event.damage}`;
       if (seenEvents.current.has(key)) return false;
@@ -81,8 +86,8 @@ export function CommandView({ initial, onNew, onReplay }: {
       if (polling || busy.current || closed) return;
       polling = true;
       const number = ++sequence.current;
-      void call<CommandGame>(`/${initial.id}`).then((next) => { if (!closed) { apply(next,number); if (number >= applied.current) setError(""); } })
-        .catch((e) => { if (!closed) { setError(e.message); if (e.message.startsWith("Command session expired")) setExpired(true); } })
+      void call<CommandGame>(`/${initial.id}`).then((next) => { if (!closed) { apply(next,number); if (number >= applied.current) setError(""); pollErrorReported.current=false; } })
+        .catch((e) => { if (!closed) { setError(e.message); const missing=e.message.startsWith("Command session expired"); if (missing) setExpired(true); if (!pollErrorReported.current) {trackError("poll",missing?"expired":"network");pollErrorReported.current=true;} } })
         .finally(() => { polling = false; });
     }, 250);
     return () => { closed = true; window.clearInterval(timer); };
@@ -136,7 +141,7 @@ export function CommandView({ initial, onNew, onReplay }: {
     try {
       apply(await call<CommandGame>(`/${game.id}/orders`, {ids:selected,kind,target}),number);
       setError("");
-    } catch (e) { setError((e as Error).message); if ((e as Error).message.startsWith("Command session expired")) setExpired(true); }
+    } catch (e) { setError((e as Error).message); const missing=(e as Error).message.startsWith("Command session expired"); if (missing) setExpired(true); trackError("order",missing?"expired":"rejected"); }
     finally { busy.current = false; }
   }
   async function control(paused?: boolean, speed?: number) {
@@ -144,7 +149,7 @@ export function CommandView({ initial, onNew, onReplay }: {
     busy.current = true;
     const number = ++sequence.current;
     try { apply(await call<CommandGame>(`/${game.id}/control`,{paused,speed}),number); setError(""); }
-    catch (e) { setError((e as Error).message); if ((e as Error).message.startsWith("Command session expired")) setExpired(true); }
+    catch (e) { setError((e as Error).message); const missing=(e as Error).message.startsWith("Command session expired"); if (missing) setExpired(true); trackError("control",missing?"expired":"rejected"); }
     finally { busy.current = false; }
   }
   function world(clientX:number, clientY:number): [number,number] {
@@ -217,14 +222,15 @@ export function CommandView({ initial, onNew, onReplay }: {
   async function download() {
     try {
       const record = await call<object>(`/${game.id}/replay`);
+      void track("replay_downloaded", {mode:"Command",map:game.battle.map});
       const url = URL.createObjectURL(new Blob([JSON.stringify(record)],{type:"application/json"}));
       const a = document.createElement("a"); a.href=url; a.download=`echelon-command-${game.seed}.json`; a.click();
       window.setTimeout(() => URL.revokeObjectURL(url),1000);
-    } catch (e) {setError((e as Error).message); if ((e as Error).message.startsWith("Command session expired")) setExpired(true);}
+    } catch (e) {setError((e as Error).message); const missing=(e as Error).message.startsWith("Command session expired"); if (missing) setExpired(true); trackError("replay",missing?"expired":"network");}
   }
   async function replay() {
     try {onReplay?.(await call<object>(`/${game.id}/replay`));}
-    catch(e) {setError((e as Error).message); if ((e as Error).message.startsWith("Command session expired")) setExpired(true);}
+    catch(e) {setError((e as Error).message); const missing=(e as Error).message.startsWith("Command session expired"); if (missing) setExpired(true); trackError("replay",missing?"expired":"network");}
   }
   const chosen = selected.map((id) => game.battle.units[id]).filter(Boolean);
   const last = game.battle.events.slice(-6).reverse();

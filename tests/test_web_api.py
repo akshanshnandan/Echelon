@@ -12,6 +12,7 @@ from echelon.recording import replay_battle
 class WebApiTests(unittest.TestCase):
     def setUp(self):
         web_api.sessions = web_api.SessionStore(limit=8, ttl=3600)
+        web_api.rate_limiter = web_api.RateLimiter()
         self.client = TestClient(web_api.app)
 
     def create(self, **options):
@@ -25,6 +26,28 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(config['classic_opponents'][:2], ['random', 'heuristic'])
         self.assertEqual(config['draft']['gold'], 13000)
         self.assertEqual(config['draft']['units']['cavalry']['manpower'], 10)
+        self.assertEqual(set(config['analytics']), {'token', 'host'})
+
+    def test_public_request_guard_and_feedback(self):
+        self.assertEqual(self.client.post('/api/feedback', json={'rating': 4, 'category': 'controls'}).status_code, 202)
+        self.assertEqual(self.client.post('/api/feedback', json={'rating': 6, 'category': 'controls'}).status_code, 422)
+        self.assertEqual(self.client.post('/api/feedback', json={'rating': 4, 'category': 'controls', 'message': 'name'}).status_code, 422)
+        self.assertEqual(self.client.post('/api/games', content=b'x' * 16_385).status_code, 413)
+        self.assertEqual(self.client.post('/api/games', content=(b'x' * 9000 for _ in range(2))).status_code, 413)
+        for _ in range(2):
+            self.assertEqual(self.client.post('/api/feedback', json={'rating': 3, 'category': 'gameplay'}).status_code, 202)
+        limited = self.client.post('/api/feedback', json={'rating': 3, 'category': 'gameplay'})
+        self.assertEqual(limited.status_code, 429)
+        self.assertIn('Retry-After', limited.headers)
+        self.assertEqual(web_api.rate_limiter.check('test-address', 'create', 2, 60), 0)
+        self.assertEqual(web_api.rate_limiter.check('test-address', 'create', 2, 60), 0)
+        self.assertGreater(web_api.rate_limiter.check('test-address', 'create', 2, 60), 0)
+        web_api.rate_limiter = web_api.RateLimiter()
+        self.assertEqual(web_api.rate_limiter.check('global', 'all', 1, 60), 0)
+        for index in range(4100):
+            web_api.rate_limiter.check(f'address-{index}', 'read', 1, 60)
+        self.assertLessEqual(len(web_api.rate_limiter.buckets), 4096)
+        self.assertGreater(web_api.rate_limiter.check('global', 'all', 1, 60), 0)
 
     def test_classic_creation_turns_and_illegal_order(self):
         game = self.create(human_army='Red', first_army='Blue', opponent='random',

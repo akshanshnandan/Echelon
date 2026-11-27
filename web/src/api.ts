@@ -7,6 +7,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const problem = await response.json().catch(() => ({}));
+    if (response.status === 404 && path.startsWith("/games/"))
+      throw new Error("Game session expired. Start a new battle.");
     throw new Error(
       typeof problem.detail === "string"
         ? problem.detail
@@ -17,6 +19,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const getConfig = () => request<Config>("/config");
+export const sendFeedback = (rating: number, category: string) =>
+  request<{status:string}>("/feedback", {method:"POST", body:JSON.stringify({rating,category})});
 export const createGame = (setup: object) =>
   request<Game>("/games", { method: "POST", body: JSON.stringify(setup) });
 export const getGame = (id: string) => request<Game>(`/games/${id}`);
