@@ -15,6 +15,7 @@ Echelon is a Python research project and browser-playable tactical strategy game
 - **Expanded army builder:** Draft one to four formations under gold and manpower limits, face a seeded AI doctrine, and save versioned battles that open in the replay viewer. Classic remains available unchanged.
 - **Browser edition:** React and TypeScript render a responsive battlefield and army builder. FastAPI calls the existing Python battle controllers, serves the built site and API from one origin, and holds bounded, expiring game sessions.
 - **Command Mode:** A separate continuous 1200×800 battlefield with simultaneous formations, persistent orders, automatic combat, terrain, objective victories, programmed real-time AI, pause and speed controls, and version 3 deterministic replay verification.
+- **Field command interface:** Original vector formations and terrain, drag selection, camera pan and zoom, a live Command battle on the landing page, and browser playback of version 3 recordings. See the [Phase 12 visual guide](docs/phase12_visual.md).
 
 **Stack:** Python 3.14 (tested on Windows), Gymnasium, NumPy, Stable-Baselines3, sb3-contrib, PyTorch, and pygame-ce. Versions are pinned in [requirements.txt](requirements.txt). The battle engine and text simulator use only the Python standard library.
 
@@ -45,6 +46,8 @@ cd ..
 ```
 
 Open **http://127.0.0.1:8000** and select **Command** on the setup screen to play the new real-time-with-pause ruleset. Choose Open Field or Ridge and Forest, then click or tap friendly formations to issue orders. Classic and Expanded remain available. The public web build does not include a PPO checkpoint. See the [Command guide](docs/phase11_command.md) and [browser edition guide](docs/phase10_web.md). **The browser game is not publicly deployed yet.**
+
+The Replays page opens Classic, Expanded, and Command recordings. Command playback reads recorded checkpoints and events; it does not run combat. The landing page previews an original recorded Command battle. This Phase 12 redesign is source work only and has not been deployed.
 
 ![Echelon browser landing page](docs/phase10_landing.png)
 
@@ -155,6 +158,7 @@ The selected policy improved its final-test score against RandomGeneral by **6.4
 | `echelon/drafting.py`, `doctrines.py`, `expanded*.py`, `army_builder.py` | Expanded roster rules, doctrine drafts, battles, tournaments, replay verification, and builder UI |
 | `echelon/web_api.py`, `web/` | Lightweight FastAPI sessions and React/TypeScript browser interface |
 | `echelon/command_engine.py`, `command_general.py`, `command_game.py`, `command_recording.py` | Separate Command simulation, heuristic AI, server clock, and version 3 replay verifier |
+| `web/src/CommandBattlefield.tsx`, `CommandReplayView.tsx`, `commandReplay.ts`, `phase12.css` | Shared field artwork, checkpoint playback, validation, and visual design |
 | `Dockerfile`, `render.yaml`, `.github/workflows/web.yml` | Single-service build, Render example, and automated web checks |
 | `echelon/export_comparison.py`, `final_test.py` | Matched replays and frozen final comparison |
 | `tests/`, `docs/`, `examples/` | Regression tests, research reports, sample replay |

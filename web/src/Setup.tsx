@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { previewDraft } from "./api";
 import type { Army, Config, Kind } from "./types";
+import { UnitArtwork } from "./CommandBattlefield";
 
 export type SetupState = {
   ruleset: "Classic" | "Expanded" | "Command";
@@ -245,9 +246,7 @@ export function Setup({
               <div className="unit-market">
                 {(Object.keys(costs) as Kind[]).map((kind) => (
                   <div className="market-card" key={kind}>
-                    <div className={`market-icon ${kind}`}>
-                      {kind[0].toUpperCase()}
-                    </div>
+                    <div className={`market-icon ${kind}`}><UnitArtwork kind={kind} army="Blue" /></div>
                     <div>
                       <strong>{kind[0].toUpperCase() + kind.slice(1)}</strong>
                       <small>
@@ -274,10 +273,7 @@ export function Setup({
                 </span>
                 {roster.map((kind, index) => (
                   <div key={`${kind}-${index}`} className="roster-slot">
-                    <span>
-                      {String(index + 1).padStart(2, "0")} &nbsp;{" "}
-                      {kind.toUpperCase()}
-                    </span>
+                    <span className="roster-unit"><UnitArtwork kind={kind} army="Blue" />{String(index + 1).padStart(2, "0")} &nbsp; {kind.toUpperCase()}</span>
                     <button
                       aria-label={`Remove ${kind} ${index + 1}`}
                       onClick={() => remove(index)}
@@ -298,9 +294,7 @@ export function Setup({
                         .join(" / ")
                     : "Preparing draft…"}
                 </p>
-                <small>
-                  Programmed drafting doctrine, not a trained neural network.
-                </small>
+                <small>{({balanced:"A flexible mix of all three arms.",cavalry:"Fast riders seek exposed lines and batteries.",artillery:"Long-range fire controls the approach.",infantry:"A strong line favors steady defense."} as Record<string,string>)[setup.opponent] ?? "Programmed drafting doctrine."} Programmed strategy, not a trained neural network.</small>
               </div>
             </>
           ) : (
@@ -319,6 +313,7 @@ export function Setup({
               {warning || error}
             </p>
           )}
+          {setup.ruleset === "Expanded" && <div className="deploy-label">DEPLOY ARMY / CONFIRM ROSTER</div>}
           <button
             className="primary-button start-button"
             disabled={busy || (setup.ruleset === "Expanded" && !roster.length)}

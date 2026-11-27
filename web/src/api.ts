@@ -28,6 +28,7 @@ export const submitOrder = (id: string, order: Order) =>
 export const getReplay = (id: string) => request<Replay>(`/games/${id}/replay`);
 export const sampleReplay = (ruleset: "classic" | "expanded") =>
   request<Replay>(`/replays/sample/${ruleset}`);
+export const commandSampleReplay = () => request<unknown>("/replays/sample/command");
 export const previewDraft = (
   roster: Kind[],
   doctrine: string,
