@@ -67,6 +67,9 @@ test("Command battle finishes and opens its recorded replay", async ({page}) => 
   const metrics=await page.evaluate(() => (window as Window & {__echelonMetrics?: {fps:number;p95FrameMs:number;sampleCount:number}}).__echelonMetrics);
   expect(metrics?.sampleCount).toBeGreaterThan(30);
   console.log("Command browser frame metrics",metrics);
+  const downloaded=page.waitForEvent("download");
+  await page.getByRole("button",{name:"Download replay"}).click();
+  expect((await downloaded).suggestedFilename()).toContain("echelon-command-");
   await page.getByRole("button",{name:"Study replay"}).click();
   await expect(page.getByLabel("Command replay timeline")).toBeVisible();
 });

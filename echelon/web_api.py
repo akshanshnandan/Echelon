@@ -1,10 +1,11 @@
 """Small authoritative HTTP API for Classic and Expanded battles."""
 import json
+import hashlib
 import os
 import secrets
 import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from pathlib import Path
 from typing import Literal
 
@@ -30,6 +31,9 @@ DIST = ROOT / "web" / "dist"
 SESSION_LIMIT = max(1, int(os.environ.get("ECHELON_MAX_SESSIONS", "256")))
 SESSION_TTL = max(60, int(os.environ.get("ECHELON_SESSION_TTL", "3600")))
 PPO_CHECKPOINT = os.environ.get("ECHELON_PPO_CHECKPOINT")
+POSTHOG_TOKEN = os.environ.get("ECHELON_POSTHOG_PROJECT_TOKEN", "")
+POSTHOG_HOST = os.environ.get("ECHELON_POSTHOG_HOST", "https://us.i.posthog.com")
+MAX_REQUEST_BYTES = 16_384
 
 
 class StrictModel(BaseModel):
@@ -89,6 +93,108 @@ class CommandControlRequest(StrictModel):
     speed: Literal[0.5, 1.0, 2.0, 4.0] | None = None
 
 
+class FeedbackRequest(StrictModel):
+    rating: int = Field(ge=1, le=5)
+    category: Literal["gameplay", "controls", "performance", "bug", "other"]
+
+
+class RateLimiter:
+    """Small per-process abuse guard; only salted address digests are held in memory."""
+
+    def __init__(self):
+        self.salt = secrets.token_bytes(32)
+        self.buckets = {}
+        self.lock = threading.Lock()
+
+    def check(self, address, group, limit, window):
+        digest = hashlib.blake2s(address.encode(), key=self.salt).hexdigest()
+        key = (digest, group)
+        now = time.monotonic()
+        with self.lock:
+            if len(self.buckets) >= 4096:
+                self.buckets = {k: v for k, v in self.buckets.items() if v and v[-1] > now - 3600}
+                while len(self.buckets) >= 4096:
+                    oldest = next((k for k in self.buckets if k[1] != "all"), None)
+                    if oldest is None:
+                        break
+                    self.buckets.pop(oldest)
+            bucket = self.buckets.setdefault(key, deque())
+            while bucket and bucket[0] <= now - window:
+                bucket.popleft()
+            if len(bucket) >= limit:
+                return max(1, int(window - (now - bucket[0])))
+            bucket.append(now)
+            return 0
+
+
+rate_limiter = RateLimiter()
+
+
+class PublicGuard:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not scope["path"].startswith("/api/"):
+            return await self.app(scope, receive, send)
+        path, method = scope["path"], scope["method"]
+        if path == "/api/health":
+            return await self.app(scope, receive, send)
+        address = (scope.get("client") or ("unknown", 0))[0]
+        if path == "/api/feedback":
+            group, limit, window = "feedback", 5, 3600
+        elif method == "GET" and (path.endswith("/replay") or path == "/api/replays/sample/expanded"):
+            group, limit, window = "replay", 30, 60
+        elif method == "GET" and path.startswith("/api/command/"):
+            group, limit, window = "command_poll", 3000, 60
+        elif method == "POST" and path in ("/api/games", "/api/command"):
+            group, limit, window = "create", 12, 60
+        elif method == "POST":
+            group, limit, window = "write", 120, 60
+        else:
+            group, limit, window = "read", 360, 60
+        retry = rate_limiter.check(address, group, limit, window)
+        if not retry:
+            retry = rate_limiter.check("global", "all", 6000, 60)
+        if retry:
+            return await JSONResponse({"detail": "Too many requests; try again shortly"}, status_code=429,
+                                      headers={"Retry-After": str(retry)})(scope, receive, send)
+        if method in ("POST", "PUT", "PATCH"):
+            headers = dict(scope.get("headers", []))
+            try:
+                length = int(headers.get(b"content-length", b"0"))
+            except ValueError:
+                length = MAX_REQUEST_BYTES + 1
+            if length > MAX_REQUEST_BYTES:
+                return await JSONResponse({"detail": "Request body too large"}, status_code=413)(scope, receive, send)
+            chunks = []
+            size = 0
+            while True:
+                message = await receive()
+                if message["type"] != "http.request":
+                    return
+                chunk = message.get("body", b"")
+                size += len(chunk)
+                if size > MAX_REQUEST_BYTES:
+                    return await JSONResponse({"detail": "Request body too large"}, status_code=413)(scope, receive, send)
+                chunks.append(chunk)
+                if not message.get("more_body", False):
+                    break
+            body = b"".join(chunks)
+            original_receive = receive
+            sent_body = False
+
+            async def replay_receive():
+                nonlocal sent_body
+                if not sent_body:
+                    sent_body = True
+                    return {"type": "http.request", "body": body, "more_body": False}
+                return await original_receive()
+
+            receive = replay_receive
+        await self.app(scope, receive, send)
+
+
 class SessionStore:
     """Bounded in-process sessions. One worker only; restarts lose all games."""
 
@@ -130,6 +236,7 @@ class SessionStore:
 
 sessions = SessionStore()
 app = FastAPI(title="Echelon", version="0.10.0")
+app.add_middleware(PublicGuard)
 
 
 def ppo_ready():
@@ -172,6 +279,7 @@ def health():
 @app.get("/api/config")
 def config():
     return {"board_size": 8, "max_rounds": 30,
+            "analytics": {"token": POSTHOG_TOKEN, "host": POSTHOG_HOST},
             "command_maps": list(MAPS),
             "classic_opponents": ["random", "heuristic"] + (["ppo"] if ppo_ready() else []),
             "expanded_opponents": list(WEIGHTS),
@@ -181,6 +289,15 @@ def config():
                                        "health": STATS[kind][0], "movement": STATS[kind][1],
                                        "attack_power": STATS[kind][2], "attack_range": STATS[kind][3]}
                                 for kind, (cost, people) in RULES.costs.items()}}}
+
+
+@app.post("/api/feedback", status_code=202)
+def feedback(request: FeedbackRequest):
+    # Fixed vocabulary only; never log visitor identifiers or free text.
+    import logging
+    logging.getLogger("uvicorn.error").info("player_feedback rating=%d category=%s",
+                                            request.rating, request.category)
+    return {"status": "received"}
 
 
 @app.post("/api/draft/preview")
