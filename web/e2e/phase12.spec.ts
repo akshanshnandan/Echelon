@@ -59,9 +59,40 @@ test("Command battle finishes and opens its recorded replay", async ({page}) => 
   }
   await page.getByLabel("Simulation speed").selectOption("4");
   await expect(page.locator(".war-victory")).toBeVisible({timeout:60_000});
+  let pollsAfterFinish=0;
+  page.on("request", (request) => {if (request.url().endsWith(`/api/command/${id}`) && request.method()==="GET") pollsAfterFinish++;});
+  await page.waitForTimeout(650);
+  expect(pollsAfterFinish).toBe(0);
+  await expect(page.getByRole("button",{name:"Pause",exact:true})).toBeDisabled();
   const metrics=await page.evaluate(() => (window as Window & {__echelonMetrics?: {fps:number;p95FrameMs:number;sampleCount:number}}).__echelonMetrics);
   expect(metrics?.sampleCount).toBeGreaterThan(30);
   console.log("Command browser frame metrics",metrics);
   await page.getByRole("button",{name:"Study replay"}).click();
   await expect(page.getByLabel("Command replay timeline")).toBeVisible();
+});
+
+test("Command pauses polling and recovers clearly from expired sessions", async ({page}) => {
+  await page.goto("/");
+  await page.getByRole("button",{name:"Play Echelon"}).click();
+  await page.getByRole("button",{name:/Command Real-time battlefield/}).click();
+  const created=page.waitForResponse((r) => r.url().endsWith("/api/command") && r.request().method()==="POST");
+  await page.getByRole("button",{name:/Begin battle/}).click();
+  const id=(await (await created).json()).id as string;
+  await page.getByRole("button",{name:"Pause",exact:true}).click();
+  let polls=0;
+  page.on("request", (request) => {if (request.url().endsWith(`/api/command/${id}`) && request.method()==="GET") polls++;});
+  await page.waitForTimeout(650);
+  expect(polls).toBe(0);
+  await page.route(`**/api/command/${id}/control`, (route) => route.fulfill({status:503,body:JSON.stringify({detail:"Temporary network error"}),contentType:"application/json"}), {times:1});
+  await page.getByRole("button",{name:"Resume",exact:true}).click();
+  await expect(page.getByRole("alert")).toContainText("Temporary network error");
+  await expect(page.getByRole("button",{name:"Resume",exact:true})).toBeEnabled();
+  await page.route(`**/api/command/${id}`, (route) => route.request().method()==="GET" ? route.fulfill({status:404,body:JSON.stringify({detail:"Command session not found"}),contentType:"application/json"}) : route.continue());
+  await page.getByRole("button",{name:"Resume",exact:true}).click();
+  await expect(page.getByRole("alert")).toContainText("Command session expired. Start a new battle.");
+  const count=polls;
+  await page.waitForTimeout(650);
+  expect(polls).toBe(count);
+  await page.getByRole("button",{name:"New battle"}).click();
+  await expect(page.getByRole("button",{name:/Begin battle/})).toBeVisible();
 });

@@ -13,6 +13,7 @@ async function call<T>(path: string, body?: object): Promise<T> {
   });
   if (!response.ok) {
     const problem = await response.json().catch(() => ({}));
+    if (path && response.status === 404) throw new Error("Command session expired. Start a new battle.");
     throw new Error(typeof problem.detail === "string" ? problem.detail : "Command request failed");
   }
   return response.json();
@@ -40,6 +41,7 @@ export function CommandView({ initial, onNew, onReplay }: {
   const [panMode, setPanMode] = useState(false);
   const [selectionBox, setSelectionBox] = useState<Box | null>(null);
   const [error, setError] = useState("");
+  const [expired, setExpired] = useState(false);
   const [tutorial, setTutorial] = useState(() => localStorage.getItem("echelon-command-tutorial") !== "done");
   const [effects, setEffects] = useState<CommandEvent[]>([]);
   const svg = useRef<SVGSVGElement>(null);
@@ -50,6 +52,7 @@ export function CommandView({ initial, onNew, onReplay }: {
   const applied = useRef(0);
   const busy = useRef(false);
   const seenEvents = useRef(new Set<string>());
+  const effectTimer = useRef<number | undefined>(undefined);
 
   function apply(next: CommandGame, number: number) {
     if (number < applied.current) return;
@@ -63,23 +66,27 @@ export function CommandView({ initial, onNew, onReplay }: {
     });
     if (fresh.length) {
       setEffects(fresh);
-      window.setTimeout(() => setEffects([]), 650);
+      window.clearTimeout(effectTimer.current);
+      effectTimer.current = window.setTimeout(() => setEffects([]), 650);
     }
   }
 
+  useEffect(() => () => window.clearTimeout(effectTimer.current), []);
+
   useEffect(() => {
+    if (game.paused || game.battle.finished || expired) return;
     let closed = false;
     let polling = false;
     const timer = window.setInterval(() => {
       if (polling || busy.current || closed) return;
       polling = true;
       const number = ++sequence.current;
-      void call<CommandGame>(`/${initial.id}`).then((next) => { if (!closed) apply(next,number); })
-        .catch((e) => { if (!closed) setError(e.message); })
+      void call<CommandGame>(`/${initial.id}`).then((next) => { if (!closed) { apply(next,number); if (number >= applied.current) setError(""); } })
+        .catch((e) => { if (!closed) { setError(e.message); if (e.message.startsWith("Command session expired")) setExpired(true); } })
         .finally(() => { polling = false; });
     }, 250);
     return () => { closed = true; window.clearInterval(timer); };
-  }, [initial.id]);
+  }, [initial.id, game.paused, game.battle.finished, expired]);
 
   useEffect(() => {
     const from = drawnRef.current;
@@ -123,20 +130,21 @@ export function CommandView({ initial, onNew, onReplay }: {
   }, []);
 
   async function issue(kind: string, target?: string | [number,number]) {
-    if (!selected.length || game.battle.finished) return;
+    if (!selected.length || game.battle.finished || expired) return;
     busy.current = true;
     const number = ++sequence.current;
     try {
       apply(await call<CommandGame>(`/${game.id}/orders`, {ids:selected,kind,target}),number);
       setError("");
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) { setError((e as Error).message); if ((e as Error).message.startsWith("Command session expired")) setExpired(true); }
     finally { busy.current = false; }
   }
   async function control(paused?: boolean, speed?: number) {
+    if (expired || game.battle.finished) return;
     busy.current = true;
     const number = ++sequence.current;
     try { apply(await call<CommandGame>(`/${game.id}/control`,{paused,speed}),number); setError(""); }
-    catch (e) { setError((e as Error).message); }
+    catch (e) { setError((e as Error).message); if ((e as Error).message.startsWith("Command session expired")) setExpired(true); }
     finally { busy.current = false; }
   }
   function world(clientX:number, clientY:number): [number,number] {
@@ -212,11 +220,11 @@ export function CommandView({ initial, onNew, onReplay }: {
       const url = URL.createObjectURL(new Blob([JSON.stringify(record)],{type:"application/json"}));
       const a = document.createElement("a"); a.href=url; a.download=`echelon-command-${game.seed}.json`; a.click();
       window.setTimeout(() => URL.revokeObjectURL(url),1000);
-    } catch (e) {setError((e as Error).message);}
+    } catch (e) {setError((e as Error).message); if ((e as Error).message.startsWith("Command session expired")) setExpired(true);}
   }
   async function replay() {
     try {onReplay?.(await call<object>(`/${game.id}/replay`));}
-    catch(e) {setError((e as Error).message);}
+    catch(e) {setError((e as Error).message); if ((e as Error).message.startsWith("Command session expired")) setExpired(true);}
   }
   const chosen = selected.map((id) => game.battle.units[id]).filter(Boolean);
   const last = game.battle.events.slice(-6).reverse();
@@ -227,7 +235,7 @@ export function CommandView({ initial, onNew, onReplay }: {
       <div className="war-clock"><span>ELAPSED</span><strong>{game.battle.time.toFixed(1)}<small>s</small></strong><span>{game.paused ? "PAUSED" : `${game.speed}× LIVE`}</span></div>
     </header>
     {tutorial && <section className="war-tutorial" aria-label="Command quick start"><strong>YOUR FIRST ORDERS</strong><span>1. Select a formation or drag a box.</span><span>2. Click ground to move, an enemy to attack.</span><span>3. Right-click to move, or choose Pan before dragging the map.</span><button onClick={() => {setTutorial(false);localStorage.setItem("echelon-command-tutorial","done");}}>Got it</button></section>}
-    <div className="war-topbar"><div className="war-time-controls"><button onClick={() => void control(!game.paused)} aria-label={game.paused ? "Resume" : "Pause"}>{game.paused ? "▶ Resume" : "Ⅱ Pause"}</button><label>TIME SCALE<select aria-label="Simulation speed" value={game.speed} onChange={(e) => void control(undefined,Number(e.target.value))}>{[0.5,1,2,4].map((n) => <option key={n} value={n}>{n}×</option>)}</select></label></div><div className="war-camera-controls"><button className={panMode?"active":""} onClick={() => setPanMode(!panMode)} aria-pressed={panMode}>Pan</button><button aria-label="Zoom out" onClick={() => zoomBy(-.2)}>−</button><span>{Math.round(camera.zoom*100)}%</span><button aria-label="Zoom in" onClick={() => zoomBy(.2)}>+</button><button onClick={() => setCamera({x:600,y:400,zoom:1})}>Reset view</button></div></div>
+    <div className="war-topbar"><div className="war-time-controls"><button disabled={expired || game.battle.finished} onClick={() => void control(!game.paused)} aria-label={game.paused ? "Resume" : "Pause"}>{game.paused ? "▶ Resume" : "Ⅱ Pause"}</button><label>TIME SCALE<select disabled={expired || game.battle.finished} aria-label="Simulation speed" value={game.speed} onChange={(e) => void control(undefined,Number(e.target.value))}>{[0.5,1,2,4].map((n) => <option key={n} value={n}>{n}×</option>)}</select></label></div><div className="war-camera-controls"><button className={panMode?"active":""} onClick={() => setPanMode(!panMode)} aria-pressed={panMode}>Pan</button><button aria-label="Zoom out" onClick={() => zoomBy(-.2)}>−</button><span>{Math.round(camera.zoom*100)}%</span><button aria-label="Zoom in" onClick={() => zoomBy(.2)}>+</button><button onClick={() => setCamera({x:600,y:400,zoom:1})}>Reset view</button></div></div>
     <div className="war-layout"><div className="war-field-wrap"><CommandBattlefield state={game.battle} drawn={drawnRef.current} selected={selected} camera={camera} selectionBox={selectionBox} activeEvents={effects} svgRef={svg} onUnitClick={select} onUnitKey={(u) => {if(u.army===game.human_army)setSelected([u.id]);else if(selected.length)void issue("ATTACK",u.id);}} onGroundClick={ground}
       onContextMenu={(e) => {e.preventDefault();if(!panMode&&selected.length) void issue("MOVE",world(e.clientX,e.clientY));}}
       onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={(e) => {touchPointers.current.delete(e.pointerId);drag.current=null;setSelectionBox(null);}} onWheel={(e) => {e.preventDefault();zoomBy(e.deltaY<0?.12:-.12);}} />
@@ -235,7 +243,7 @@ export function CommandView({ initial, onNew, onReplay }: {
       <aside className="war-side"><section className="war-orders"><span className="eyebrow">FIELD ORDERS</span><h2>Direct the line</h2><div className="war-order-grid">{(["MOVE","ATTACK","DEFEND"] as const).map((kind) => <button key={kind} className={mode===kind?"active":""} onClick={() => setMode(kind)}>{kind}</button>)}{["HOLD","RETREAT","STOP"].map((kind) => <button key={kind} disabled={!selected.length} onClick={() => void issue(kind)}>{kind}</button>)}</div><p>{mode === "ATTACK" ? "Select an enemy formation to engage." : mode === "DEFEND" ? "Choose ground to protect." : "Choose ground for selected formations."}</p></section>
       <section className="war-inspector"><span className="eyebrow">FORMATION STATUS</span>{chosen.length ? chosen.map((u) => <div key={u.id} className="war-inspector-unit"><strong>{u.id} · {u.kind}</strong><span>{u.order} · HP {u.health.toFixed(0)} · Morale {u.morale.toFixed(0)}</span><div className="inspector-bars"><i style={{width:`${u.health/(u.kind==="infantry"?100:u.kind==="cavalry"?85:65)*100}%`}}/><b style={{width:`${u.morale}%`}}/></div><small>Facing {Math.round(u.heading*180/Math.PI)}° {u.target ? `· Target ${u.target}` : ""}</small></div>) : <p>Select your troops to inspect their orders, strength, and facing.</p>}</section>
       <section className="war-dispatch"><span className="eyebrow">FIELD DISPATCHES</span><div aria-live="polite">{last.length ? last.map((event,i) => <p key={`${event.tick}-${i}`} className={event.type==="routed"||event.type==="destroyed"?"war-alert":""}><time>{(event.tick/10).toFixed(1)}s</time> {event.unit ?? "Battle"} {event.type}{event.target ? ` ${event.target}` : ""}</p>) : <p>The armies are deploying.</p>}</div></section></aside></div>
-    {error && <p className="form-error" role="alert">{error}</p>}
+    {error && <p className="form-error" role="alert">{error} {expired && <button onClick={onNew}>New battle</button>}</p>}
     {game.battle.finished && <section className="war-victory" role="status"><span className="eyebrow">AFTER ACTION REPORT</span><h2>{game.battle.winner ? `${game.battle.winner} victory` : "Drawn battle"}</h2><p>{game.battle.reason?.replace("_"," ")} · {game.battle.time.toFixed(1)} seconds</p><div><button onClick={() => void replay()}>Study replay</button><button onClick={() => void download()}>Download replay</button><button onClick={onNew}>New battle</button></div></section>}
   </div>;
 }
