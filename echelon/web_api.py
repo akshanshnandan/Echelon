@@ -24,6 +24,7 @@ from .model import Order, OrderType
 from .recording import state_snapshot
 from .command_game import CommandGame
 from .command_engine import MAPS
+from .command_drafting import SIZES, PRESETS
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -73,16 +74,26 @@ class RemoveRequest(StrictModel):
     index: int = Field(ge=0, le=RULES.maximum - 1)
 
 
+class CommandMoraleRequest(StrictModel):
+    casualty: float = Field(default=1.35, ge=0.5, le=3.0)
+    cavalry: float = Field(default=1.8, ge=0.5, le=4.0)
+    break_shock: float = Field(default=8.0, ge=0.0, le=20.0)
+
+
 class CommandRequest(StrictModel):
     human_army: Literal["Blue", "Red"] = "Blue"
     opponent: Literal["balanced", "aggressive", "defensive"] = "balanced"
     map: Literal["open_field", "ridge_forest"] = "open_field"
     seed: int = Field(default=42, ge=0, le=2_147_483_647)
-    roster: list[Literal["infantry", "cavalry", "artillery"]] | None = Field(default=None, min_length=2, max_length=8)
+    size: Literal["skirmish", "field", "grand"] = "skirmish"
+    budget: int | None = None
+    manpower: int | None = None
+    roster: list[Literal["infantry", "cavalry", "artillery"]] | None = Field(default=None, min_length=2, max_length=15)
+    morale: CommandMoraleRequest | None = None
 
 
 class CommandOrderRequest(StrictModel):
-    ids: list[str] = Field(min_length=1, max_length=8)
+    ids: list[str] = Field(min_length=1, max_length=15)
     kind: Literal["MOVE", "ATTACK", "HOLD", "DEFEND", "RETREAT", "STOP"]
     target: tuple[float, float] | str | None = None
     waypoints: list[tuple[float, float]] = Field(default_factory=list, max_length=6)
@@ -281,6 +292,10 @@ def config():
     return {"board_size": 8, "max_rounds": 30,
             "analytics": {"token": POSTHOG_TOKEN, "host": POSTHOG_HOST},
             "command_maps": list(MAPS),
+            "command_sizes": {name: {"maximum": cap, "gold": gold, "manpower": people,
+                                      "width": width, "height": height, "preset": PRESETS[name]}
+                              for name, (cap, gold, people, width, height) in SIZES.items()},
+            "command_morale_defaults": {"casualty": 1.35, "cavalry": 1.8, "break_shock": 8.0},
             "classic_opponents": ["random", "heuristic"] + (["ppo"] if ppo_ready() else []),
             "expanded_opponents": list(WEIGHTS),
             "draft": {"gold": RULES.gold, "manpower": RULES.manpower,
@@ -402,7 +417,9 @@ def command_state(game, key):
 @app.post("/api/command", status_code=201)
 def create_command(request: CommandRequest):
     try:
-        game = CommandGame(request.human_army, request.opponent, request.map, request.seed, request.roster)
+        game = CommandGame(request.human_army, request.opponent, request.map, request.seed, request.roster,
+                           ruleset_version=4, size=request.size, budget=request.budget, manpower=request.manpower,
+                           morale_rules=request.morale.model_dump() if request.morale else None)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     key = sessions.create(game)

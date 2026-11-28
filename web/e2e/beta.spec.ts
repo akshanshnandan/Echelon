@@ -47,6 +47,7 @@ test("feedback needs no account and Classic session loss has recovery", async ({
   await expect(page.getByText("Thanks. Your rating was received.")).toBeVisible();
   await page.getByRole("button",{name:"Close"}).click();
   await page.getByRole("button",{name:"Play Echelon"}).click();
+  await page.getByRole("button",{name:/Classic Original three formations/}).click();
   const created=page.waitForResponse((r) => r.url().endsWith("/api/games") && r.request().method()==="POST");
   await page.getByRole("button",{name:/Begin battle/}).click();
   const game=await (await created).json();

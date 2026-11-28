@@ -11,8 +11,8 @@ test("Command drag selection, pan, zoom, and right-click orders", async ({page})
   const svg=page.locator("svg[aria-label='Command battlefield']");
   const box=await svg.boundingBox();
   expect(box).not.toBeNull();
-  const coord=(x:number,y:number) => ({x:box!.x+x/1200*box!.width,y:box!.y+y/800*box!.height});
-  const start=coord(75,80), end=coord(245,395);
+  const coord=(x:number,y:number) => svg.evaluate((element,[px,py]) => {const svgElement=element as SVGSVGElement;const point=svgElement.createSVGPoint();point.x=px;point.y=py;const screen=point.matrixTransform(svgElement.getScreenCTM()!);return {x:screen.x,y:screen.y};},[x,y] as [number,number]);
+  const start=await coord(75,80), end=await coord(245,395);
   await page.mouse.move(start.x,start.y); await page.mouse.down(); await page.mouse.move(end.x,end.y,{steps:12}); await page.mouse.up();
   await expect(page.locator(".war-inspector-unit")).toHaveCount(2);
   await page.getByRole("button",{name:"Zoom in"}).click();

@@ -16,6 +16,7 @@ async function completeBattle(
     await page.getByLabel("Recruit cavalry").click();
     await expect(page.getByText("YOUR FORMATIONS · 4/4")).toBeVisible();
   }
+  if (ruleset === "Classic") await page.getByRole("button", {name:/Classic Original three formations/}).click();
   await page.getByLabel("Your army").selectOption(army);
   const created = page.waitForResponse(
     (response) =>
@@ -137,6 +138,7 @@ test("mobile setup and battlefield fit the viewport", async ({ page }) => {
     );
   });
   await page.screenshot({ path: "../docs/phase10_mobile.png", fullPage: true });
+  await page.getByRole("button", {name:/Classic Original three formations/}).click();
   const created = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/games") &&

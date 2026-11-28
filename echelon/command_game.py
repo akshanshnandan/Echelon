@@ -3,13 +3,23 @@ import time
 
 from .command_engine import CommandBattle, DT
 from .command_general import CommandGeneral
+from .command_engine_v4 import CommandBattle as CommandBattleV4
+from .command_general_v4 import CommandGeneral as CommandGeneralV4
 
 
 class CommandGame:
-    def __init__(self, human_army="Blue", opponent="balanced", map_name="open_field", seed=42, roster=None, clock=None):
-        self.battle = CommandBattle(seed, map_name, roster)
+    def __init__(self, human_army="Blue", opponent="balanced", map_name="open_field", seed=42, roster=None, clock=None,
+                 *, ruleset_version=3, size="skirmish", enemy_roster=None, budget=None, manpower=None, morale_rules=None):
+        if ruleset_version not in (3, 4):
+            raise ValueError("Unsupported Command ruleset version")
+        self.ruleset_version = ruleset_version
+        self.battle = (CommandBattle(seed, map_name, roster) if ruleset_version == 3 else
+                       CommandBattleV4(seed, map_name, roster, size=size, enemy_roster=enemy_roster,
+                                       budget=budget, manpower=manpower, opponent=opponent, human_army=human_army,
+                                       morale_rules=morale_rules))
         self.human_army, self.opponent = human_army, opponent
-        self.general = CommandGeneral("Red" if human_army == "Blue" else "Blue", opponent)
+        general_type = CommandGeneral if ruleset_version == 3 else CommandGeneralV4
+        self.general = general_type("Red" if human_army == "Blue" else "Blue", opponent)
         self.clock = clock or time.monotonic
         self.last_clock = self.clock()
         self.accumulator = 0.0
@@ -63,9 +73,14 @@ class CommandGame:
 
     def recording(self):
         self.advance()
-        return {"version": 3, "ruleset": "Command", "seed": self.battle.seed,
+        record = {"version": self.ruleset_version, "ruleset": "Command", "seed": self.battle.seed,
                 "map": self.battle.map_name, "roster": self.battle.roster,
                 "human_army": self.human_army, "opponent": self.opponent,
                 "initial": self.initial, "commands": self.commands,
                 "events": self.battle.events, "checkpoints": self.checkpoints,
                 "final": self.battle.snapshot()}
+        if self.ruleset_version == 4:
+            record.update({"size": self.battle.size, "enemy_roster": self.battle.enemy_roster,
+                           "budget": self.battle.budget, "manpower": self.battle.manpower,
+                           "morale_rules": self.battle.morale_rules})
+        return record

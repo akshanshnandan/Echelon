@@ -108,7 +108,7 @@ export default function App() {
     setExpiredGame(false);
     try {
       if (next.ruleset === "Command") {
-        const created = await createCommand({human_army: next.human_army, opponent: next.opponent, map: next.map, seed: next.seed});
+        const created = await createCommand({human_army: next.human_army, opponent: next.opponent, map: next.map, seed: next.seed, size: next.size, roster: next.roster});
         battleStarted.current.set(created.id, performance.now());
         void track("battle_started", {mode:"Command",map:next.map,opponent:next.opponent});
         setCommandGame(created);
@@ -116,7 +116,7 @@ export default function App() {
         setSetup(next);
         return;
       }
-      const { map: _map, ...legacySetup } = next;
+      const { map: _map, size: _size, ...legacySetup } = next;
       const created = await createGame(legacySetup);
       battleStarted.current.set(created.id, performance.now());
       void track("battle_started", {mode:created.ruleset,opponent:created.opponent});

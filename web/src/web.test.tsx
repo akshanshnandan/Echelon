@@ -13,6 +13,11 @@ import { commandStateAt, validateCommandReplay } from "./commandReplay";
 import type { Config, Order, Snapshot } from "./types";
 
 const config: Config = {
+  command_sizes: {
+    skirmish: {maximum:4,gold:13000,manpower:50,width:1200,height:800,preset:["infantry","infantry","cavalry","artillery"]},
+    field: {maximum:8,gold:26000,manpower:100,width:1400,height:900,preset:["infantry","infantry","infantry","infantry","cavalry","cavalry","artillery","artillery"]},
+    grand: {maximum:15,gold:50000,manpower:180,width:1600,height:1000,preset:["infantry","infantry","infantry","infantry","infantry","infantry","cavalry","cavalry","cavalry","cavalry","cavalry","artillery","artillery","artillery","artillery"]},
+  },
   board_size: 8,
   max_rounds: 30,
   classic_opponents: ["random", "heuristic"],

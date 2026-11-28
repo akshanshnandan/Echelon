@@ -70,6 +70,7 @@ export type UnitInfo = {
   attack_range: number;
 };
 export type Config = {
+  command_sizes: Record<"skirmish" | "field" | "grand", {maximum:number;gold:number;manpower:number;width:number;height:number;preset:Kind[]}>;
   board_size: number;
   max_rounds: number;
   analytics?: {token: string; host: string};

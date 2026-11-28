@@ -1,0 +1,71 @@
+{
+  "size": "grand",
+  "headless": true,
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "interactive": false,
+  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36",
+  "durationMs": 22925.300000005962,
+  "fps": 59.3231059135386,
+  "p95FrameMs": 16.799999999999272,
+  "frameCount": 1360,
+  "byWindow": [
+    {
+      "fps": 58.716458223171486,
+      "p95": 16.800000000000182,
+      "count": 300
+    },
+    {
+      "fps": 58.63497771870847,
+      "p95": 16.799999999999272,
+      "count": 300
+    },
+    {
+      "fps": 59.60422792656759,
+      "p95": 16.700000000000728,
+      "count": 300
+    },
+    {
+      "fps": 60.00360021601295,
+      "p95": 16.799999999999272,
+      "count": 300
+    },
+    {
+      "fps": 59.99925000937487,
+      "p95": 16.799999999999272,
+      "count": 160
+    }
+  ],
+  "hitCount": 16,
+  "longTaskCount": 0,
+  "pollCount": 46,
+  "traceTypes": {
+    "RunTask": {
+      "count": 68959,
+      "ms": 6248.218999997019,
+      "max": 56.331
+    },
+    "FireAnimationFrame": {
+      "count": 2122,
+      "ms": 345.35399999999936,
+      "max": 25.339
+    },
+    "FunctionCall": {
+      "count": 2627,
+      "ms": 610.1089999999994,
+      "max": 24.978
+    },
+    "Layout": {
+      "count": 745,
+      "ms": 390.06900000000024,
+      "max": 19.919
+    },
+    "Paint": {
+      "count": 1408,
+      "ms": 1890.4689999999996,
+      "max": 37.679
+    }
+  }
+}

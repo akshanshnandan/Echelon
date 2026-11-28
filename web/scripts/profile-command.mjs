@@ -9,6 +9,7 @@ const cdp = await page.context().newCDPSession(page);
 await page.goto(base);
 await page.getByRole('button',{name:'Play Echelon'}).click();
 await page.getByRole('button',{name:/Command Real-time battlefield/}).click();
+await page.getByLabel('Battle size').selectOption(process.env.SIZE ?? 'skirmish');
 await page.getByLabel('Battlefield map').selectOption('ridge_forest');
 const created = page.waitForResponse(r => r.url().endsWith('/api/command') && r.request().method()==='POST');
 await page.getByRole('button',{name:/Begin battle/}).click();
@@ -26,8 +27,8 @@ page.on('response', async r => {if (r.url().includes(`/api/command/${id}`) && r.
 if (process.env.INTERACTIVE === '1') await page.getByRole('button',{name:'Pause',exact:true}).click();
 for (const [unit,target] of [['B1','R1'],['B2','R2'],['B3','R4']]) await page.request.post(`${base}/api/command/${id}/orders`,{data:{ids:[unit],kind:'ATTACK',target}});
 if (process.env.INTERACTIVE === '1') {
-  await page.locator('[data-unit-id="B1"]').click();
-  await page.locator('[data-unit-id="B2"]').click({modifiers:['Shift']});
+  await page.getByRole('navigation',{name:'Friendly formations'}).getByRole('button',{name:/B1 INF/}).click();
+  await page.getByRole('navigation',{name:'Friendly formations'}).getByRole('button',{name:/B2 INF/}).click({modifiers:['Shift']});
   await page.getByRole('button',{name:'Zoom in'}).click();
   const beforePan = await page.locator('svg[aria-label="Command battlefield"]').getAttribute('viewBox');
   await page.getByRole('button',{name:'Pan',exact:true}).click();
@@ -44,7 +45,7 @@ await page.getByLabel('Simulation speed').selectOption('4');
 const trace = [];
 cdp.on('Tracing.dataCollected', ({value}) => trace.push(...value));
 await cdp.send('Tracing.start',{categories:'devtools.timeline,blink.user_timing,toplevel,disabled-by-default-devtools.timeline',transferMode:'ReportEvents'});
-await page.locator('.war-victory').waitFor({timeout:60000});
+await page.locator('.war-victory').waitFor({timeout:120000});
 await cdp.send('Tracing.end');
 await new Promise(resolve => cdp.once('Tracing.tracingComplete',resolve));
 const raw = await page.evaluate(() => window.__profile);
@@ -57,6 +58,13 @@ const byWindow = [];
 for(let i=0;i<frames.length;i+=300) { const f=frames.slice(i,i+300); byWindow.push({fps:1000/(f.reduce((a,b)=>a+b,0)/f.length),p95:percentile([...f],.95),count:f.length}); }
 const types={};
 for (const e of trace) if(e.ph==='X' && e.dur && ['FunctionCall','EvaluateScript','Layout','Paint','UpdateLayerTree','RecalculateStyles','RunTask','Animation','FireAnimationFrame','ParseHTML','XHRReadyStateChange'].includes(e.name)) {const t=types[e.name]??={count:0,ms:0,max:0}; t.count++;t.ms+=e.dur/1000;t.max=Math.max(t.max,e.dur/1000);}
-const result={headless,viewport,interactive:process.env.INTERACTIVE==='1',ua:await page.evaluate(()=>navigator.userAgent),durationMs:frames.reduce((a,b)=>a+b,0),fps:1000/(frames.reduce((a,b)=>a+b,0)/frames.length),p95FrameMs:percentile([...frames],.95),frameCount:frames.length,byWindow,hitCount,longTaskCount:raw.longs.length,pollCount:raw.polls.length,traceTypes:types};
+const result={size:process.env.SIZE ?? 'skirmish',headless,viewport,interactive:process.env.INTERACTIVE==='1',ua:await page.evaluate(()=>navigator.userAgent),durationMs:frames.reduce((a,b)=>a+b,0),fps:1000/(frames.reduce((a,b)=>a+b,0)/frames.length),p95FrameMs:percentile([...frames],.95),frameCount:frames.length,byWindow,hitCount,longTaskCount:raw.longs.length,pollCount:raw.polls.length,traceTypes:types};
+const replayResponse=await page.request.get(`${base}/api/command/${id}/replay`);
+if(replayResponse.status()!==200 || (await replayResponse.json()).version!==4) throw new Error('Version 4 replay unavailable');
+const downloaded=page.waitForEvent('download');
+await page.getByRole('button',{name:'Download replay'}).click();
+if(!(await downloaded).suggestedFilename().endsWith('.json')) throw new Error('Replay download failed');
+await page.getByRole('button',{name:'Study replay'}).click();
+await page.getByLabel('Command replay timeline').waitFor();
 console.log(JSON.stringify(result,null,2));
 await browser.close();

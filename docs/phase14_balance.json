@@ -1,0 +1,363 @@
+{
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "compositions": {
+    "balanced": [
+      "infantry",
+      "infantry",
+      "cavalry",
+      "artillery"
+    ],
+    "artillery": [
+      "artillery",
+      "artillery",
+      "artillery"
+    ],
+    "infantry": [
+      "infantry",
+      "infantry",
+      "infantry"
+    ],
+    "cavalry": [
+      "cavalry",
+      "cavalry",
+      "cavalry"
+    ]
+  },
+  "legacy_diagnostic": {
+    "balanced_vs_balanced": {
+      "blue": 1,
+      "red": 3,
+      "draw": 2,
+      "mean_seconds": 22.5,
+      "mean_routings": 6.5,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "balanced_vs_artillery": {
+      "blue": 0,
+      "red": 6,
+      "draw": 0,
+      "mean_seconds": 900.0,
+      "mean_routings": 4.0,
+      "terminations": {
+        "time_limit": 6
+      }
+    },
+    "balanced_vs_infantry": {
+      "blue": 6,
+      "red": 0,
+      "draw": 0,
+      "mean_seconds": 18.3,
+      "mean_routings": 4.3,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "balanced_vs_cavalry": {
+      "blue": 0,
+      "red": 6,
+      "draw": 0,
+      "mean_seconds": 19.7,
+      "mean_routings": 4.7,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "artillery_vs_balanced": {
+      "blue": 6,
+      "red": 0,
+      "draw": 0,
+      "mean_seconds": 900.0,
+      "mean_routings": 4.0,
+      "terminations": {
+        "time_limit": 6
+      }
+    },
+    "artillery_vs_artillery": {
+      "blue": 0,
+      "red": 0,
+      "draw": 6,
+      "mean_seconds": 23.8,
+      "mean_routings": 6.0,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "artillery_vs_infantry": {
+      "blue": 6,
+      "red": 0,
+      "draw": 0,
+      "mean_seconds": 22.7,
+      "mean_routings": 3.5,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "artillery_vs_cavalry": {
+      "blue": 0,
+      "red": 6,
+      "draw": 0,
+      "mean_seconds": 10.2,
+      "mean_routings": 3.0,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "infantry_vs_balanced": {
+      "blue": 0,
+      "red": 6,
+      "draw": 0,
+      "mean_seconds": 12.8,
+      "mean_routings": 3.2,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "infantry_vs_artillery": {
+      "blue": 0,
+      "red": 6,
+      "draw": 0,
+      "mean_seconds": 20.6,
+      "mean_routings": 3.2,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "infantry_vs_infantry": {
+      "blue": 0,
+      "red": 0,
+      "draw": 6,
+      "mean_seconds": 18.9,
+      "mean_routings": 6.0,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "infantry_vs_cavalry": {
+      "blue": 0,
+      "red": 6,
+      "draw": 0,
+      "mean_seconds": 10.5,
+      "mean_routings": 3.0,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "cavalry_vs_balanced": {
+      "blue": 6,
+      "red": 0,
+      "draw": 0,
+      "mean_seconds": 20.1,
+      "mean_routings": 4.5,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "cavalry_vs_artillery": {
+      "blue": 6,
+      "red": 0,
+      "draw": 0,
+      "mean_seconds": 10.2,
+      "mean_routings": 3.0,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "cavalry_vs_infantry": {
+      "blue": 6,
+      "red": 0,
+      "draw": 0,
+      "mean_seconds": 10.5,
+      "mean_routings": 3.0,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "cavalry_vs_cavalry": {
+      "blue": 6,
+      "red": 0,
+      "draw": 0,
+      "mean_seconds": 7.6,
+      "mean_routings": 4.2,
+      "terminations": {
+        "elimination": 6
+      }
+    }
+  },
+  "version_4": {
+    "balanced_vs_balanced": {
+      "blue": 2,
+      "red": 3,
+      "draw": 1,
+      "mean_seconds": 33.2,
+      "mean_routings": 9.7,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "balanced_vs_artillery": {
+      "blue": 6,
+      "red": 0,
+      "draw": 0,
+      "mean_seconds": 111.3,
+      "mean_routings": 4.7,
+      "terminations": {
+        "objective": 1,
+        "elimination": 2,
+        "time_limit": 3
+      }
+    },
+    "balanced_vs_infantry": {
+      "blue": 6,
+      "red": 0,
+      "draw": 0,
+      "mean_seconds": 43.1,
+      "mean_routings": 7.8,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "balanced_vs_cavalry": {
+      "blue": 5,
+      "red": 1,
+      "draw": 0,
+      "mean_seconds": 49.3,
+      "mean_routings": 10.3,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "artillery_vs_balanced": {
+      "blue": 0,
+      "red": 6,
+      "draw": 0,
+      "mean_seconds": 58.1,
+      "mean_routings": 4.2,
+      "terminations": {
+        "elimination": 4,
+        "objective": 1,
+        "time_limit": 1
+      }
+    },
+    "artillery_vs_artillery": {
+      "blue": 2,
+      "red": 4,
+      "draw": 0,
+      "mean_seconds": 47.7,
+      "mean_routings": 4.3,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "artillery_vs_infantry": {
+      "blue": 6,
+      "red": 0,
+      "draw": 0,
+      "mean_seconds": 44.1,
+      "mean_routings": 5.7,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "artillery_vs_cavalry": {
+      "blue": 0,
+      "red": 6,
+      "draw": 0,
+      "mean_seconds": 10.2,
+      "mean_routings": 3.0,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "infantry_vs_balanced": {
+      "blue": 0,
+      "red": 6,
+      "draw": 0,
+      "mean_seconds": 39.1,
+      "mean_routings": 7.2,
+      "terminations": {
+        "elimination": 4,
+        "objective": 2
+      }
+    },
+    "infantry_vs_artillery": {
+      "blue": 0,
+      "red": 6,
+      "draw": 0,
+      "mean_seconds": 43.5,
+      "mean_routings": 5.0,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "infantry_vs_infantry": {
+      "blue": 0,
+      "red": 0,
+      "draw": 6,
+      "mean_seconds": 20.8,
+      "mean_routings": 6.0,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "infantry_vs_cavalry": {
+      "blue": 6,
+      "red": 0,
+      "draw": 0,
+      "mean_seconds": 15.5,
+      "mean_routings": 3.0,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "cavalry_vs_balanced": {
+      "blue": 4,
+      "red": 2,
+      "draw": 0,
+      "mean_seconds": 85.0,
+      "mean_routings": 8.5,
+      "terminations": {
+        "elimination": 4,
+        "time_limit": 2
+      }
+    },
+    "cavalry_vs_artillery": {
+      "blue": 6,
+      "red": 0,
+      "draw": 0,
+      "mean_seconds": 10.2,
+      "mean_routings": 3.0,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "cavalry_vs_infantry": {
+      "blue": 0,
+      "red": 6,
+      "draw": 0,
+      "mean_seconds": 15.5,
+      "mean_routings": 3.0,
+      "terminations": {
+        "elimination": 6
+      }
+    },
+    "cavalry_vs_cavalry": {
+      "blue": 5,
+      "red": 0,
+      "draw": 1,
+      "mean_seconds": 9.1,
+      "mean_routings": 4.5,
+      "terminations": {
+        "elimination": 6
+      }
+    }
+  }
+}

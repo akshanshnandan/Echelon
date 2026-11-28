@@ -5,8 +5,11 @@ export type CommandUnit = {
   x: number; y: number; heading: number; health: number; morale: number;
   effective: boolean; order: string; target: string | null;
   destination: [number, number] | null; waypoints: [number, number][]; width: number;
+  morale_state?: "steady" | "shaken" | "wavering" | "routing";
+  ammo?: number; setup?: number; rallies?: number;
 };
 export type CommandState = {
+  ruleset_version?: number; size?: string; width?: number; height?: number;
   tick: number; time: number; map: "open_field" | "ridge_forest";
   units: Record<string, CommandUnit>; objective: Record<"Blue" | "Red", number>;
   finished: boolean; winner: string | null; reason: string | null;
@@ -72,22 +75,25 @@ type Props = {
   onWheel?: (event: WheelEvent<SVGSVGElement>) => void;
 };
 
-export function CommandBattlefield({state, drawn, selected = [], target, camera = {x:600,y:400,zoom:1}, selectionBox,
+export function CommandBattlefield({state, drawn, selected = [], target, camera, selectionBox,
   activeEvents = [], svgRef, onUnitClick, onUnitKey, onGroundClick, onContextMenu, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onWheel}: Props) {
   const units = Object.values(state.units);
-  const spanX = 1200 / camera.zoom, spanY = 800 / camera.zoom;
+  const width = state.width ?? 1200, height = state.height ?? 800;
+  const viewCamera = camera ?? {x:width/2,y:height/2,zoom:1};
+  const spanX = width / viewCamera.zoom, spanY = height / viewCamera.zoom;
   const objectiveBlue = Math.min(1, state.objective.Blue / 35);
   const objectiveRed = Math.min(1, state.objective.Red / 35);
-  return <svg ref={svgRef} className="war-map" viewBox={`${camera.x - spanX/2} ${camera.y - spanY/2} ${spanX} ${spanY}`}
+  return <svg ref={svgRef} className="war-map" viewBox={`${viewCamera.x - spanX/2} ${viewCamera.y - spanY/2} ${spanX} ${spanY}`}
     aria-label="Command battlefield" role="img" onClick={onGroundClick} onContextMenu={onContextMenu}
     onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel} onWheel={onWheel}>
     <defs>
       <pattern id="field-grain" width="64" height="64" patternUnits="userSpaceOnUse"><path d="M 8 12 l 5 -2 M 32 48 l 4 1 M 53 9 l 2 -4" stroke="#6f795e" strokeWidth="1" opacity=".22" /></pattern>
       <pattern id="field-lines" width="120" height="120" patternUnits="userSpaceOnUse"><path d="M 0 0 H 120 M 0 0 V 120" fill="none" stroke="#607058" strokeWidth="1" opacity=".13" /></pattern>
     </defs>
-    <rect width="1200" height="800" fill="#b9ae86" />
-    <rect width="1200" height="800" fill="url(#field-grain)" />
-    <rect width="1200" height="800" fill="url(#field-lines)" />
+    <rect width={width} height={height} fill="#b9ae86" />
+    <rect width={width} height={height} fill="url(#field-grain)" />
+    <rect width={width} height={height} fill="url(#field-lines)" />
+    <g transform={`scale(${width/1200} ${height/800})`}>
     <path d="M 0 160 Q 180 120 340 165 T 690 150 T 1200 155 M 0 630 Q 260 670 490 630 T 900 645 T 1200 620" fill="none" stroke="#d9ca9c" strokeWidth="2" opacity=".5" />
     {state.map === "ridge_forest" && <>
       <rect x="570" y="160" width="100" height="480" fill="#ac9971" opacity=".76" stroke="#75654e" strokeWidth="2" />
@@ -106,6 +112,7 @@ export function CommandBattlefield({state, drawn, selected = [], target, camera 
     <text x="600" y="420" textAnchor="middle" className="objective-caption">HOLD 35 SECONDS</text>
     <circle cx="600" cy="400" r="85" fill="none" stroke="#326784" strokeWidth="7" strokeDasharray={`${objectiveBlue*534} 534`} transform="rotate(-90 600 400)" />
     <circle cx="600" cy="400" r="94" fill="none" stroke="#9c473f" strokeWidth="7" strokeDasharray={`${objectiveRed*591} 591`} transform="rotate(-90 600 400)" />
+    </g>
     {selected.map((id) => {
       const u = state.units[id];
       if (!u) return null;
@@ -121,7 +128,7 @@ export function CommandBattlefield({state, drawn, selected = [], target, camera 
       return <g key={u.id} data-unit-id={u.id} className={`war-formation ${u.army.toLowerCase()} ${u.effective ? "" : "routed"} ${active ? "selected" : ""}`}
         role={onUnitKey ? "button" : undefined} tabIndex={onUnitKey ? 0 : undefined} aria-label={onUnitKey ? `${u.army} ${u.kind} ${u.id}, ${u.order}` : undefined}
         onKeyDown={(e) => {if (onUnitKey && (e.key === "Enter" || e.key === " ")) {e.preventDefault();onUnitKey(u);}}}
-        transform={`translate(${p.x} ${p.y}) rotate(${p.heading*180/Math.PI})`} onClick={(e) => {e.stopPropagation(); onUnitClick?.(u,e);}}>
+        transform={`translate(${p.x} ${p.y}) rotate(${p.heading*180/Math.PI}) scale(${state.size === "grand" ? .62 : state.size === "field" ? .8 : 1})`} onClick={(e) => {e.stopPropagation(); onUnitClick?.(u,e);}}>
         <ellipse cx="0" cy="9" rx="40" ry="37" fill="#222b24" opacity=".23" />
         {active && <rect x="-42" y="-37" width="84" height="74" rx="6" fill="none" stroke="#fff0b8" strokeWidth="3" strokeDasharray="9 5" />}
         {target === u.id && <circle r="48" fill="none" stroke="#e8b35c" strokeWidth="3" className="target-ring" />}
@@ -132,8 +139,8 @@ export function CommandBattlefield({state, drawn, selected = [], target, camera 
         <rect x="-30" y="36" width="60" height="4" fill="#332f29" />
         <rect x="-30" y="36" width={Math.max(0,60*u.health/(u.kind === "infantry" ? 100 : u.kind === "cavalry" ? 85 : 65))} height="4" fill="#8fb57d" />
         <rect x="-30" y="43" width="60" height="3" fill="#332f29" />
-        <rect x="-30" y="43" width={Math.max(0,60*u.morale/100)} height="3" fill="#dfb96d" />
-        {!u.effective && <text x="0" y="-3" transform={`rotate(${-p.heading*180/Math.PI})`} textAnchor="middle" className="routed-label">ROUTED</text>}
+        <rect x="-30" y="43" width={Math.max(0,60*u.morale/100)} height="3" fill={u.morale_state === "wavering" || u.morale_state === "routing" ? "#d66b55" : "#dfb96d"} />
+        {(u.morale_state === "routing" || !u.effective) && <text x="0" y="-3" transform={`rotate(${-p.heading*180/Math.PI})`} textAnchor="middle" className="routed-label">{state.ruleset_version === 4 ? "ROUTING" : "ROUTED"}</text>}
         <rect x="-45" y="-42" width="90" height="96" fill="transparent" />
       </g>;
     })}
@@ -142,6 +149,6 @@ export function CommandBattlefield({state, drawn, selected = [], target, camera 
       return <circle key={`hit${e.tick}-${e.target}-${i}`} cx={u.x} cy={u.y} r="24" fill="none" stroke="#f6e2a4" strokeWidth="4" className="impact-ring" />;
     })}
     {selectionBox && <rect x={selectionBox.x} y={selectionBox.y} width={selectionBox.width} height={selectionBox.height} fill="#efe1aa" fillOpacity=".18" stroke="#f8e9b3" strokeWidth="2" strokeDasharray="8 5" pointerEvents="none" />}
-    <rect x="2" y="2" width="1196" height="796" fill="none" stroke="#5c604a" strokeWidth="4" pointerEvents="none" />
+    <rect x="2" y="2" width={width-4} height={height-4} fill="none" stroke="#5c604a" strokeWidth="4" pointerEvents="none" />
   </svg>;
 }

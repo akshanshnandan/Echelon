@@ -12,17 +12,19 @@ export type SetupState = {
   deployment: "fixed" | "random";
   seed: number;
   roster: Kind[] | null;
+  size: "skirmish" | "field" | "grand";
 };
 
 export const initialSetup: SetupState = {
-  ruleset: "Classic",
+  ruleset: "Command",
   map: "open_field",
   human_army: "Blue",
-  opponent: "heuristic",
+  opponent: "balanced",
   first_army: "Blue",
   deployment: "fixed",
   seed: 42,
   roster: null,
+  size: "skirmish",
 };
 
 type Props = {
@@ -42,11 +44,13 @@ export function Setup({
 }: Props) {
   const [setup, setSetup] = useState<SetupState>(initial);
   const [roster, setRoster] = useState<Kind[]>(
-    initial.roster ?? ["infantry", "cavalry", "artillery"],
+    initial.roster ?? ["infantry", "infantry", "cavalry", "artillery"],
   );
   const [warning, setWarning] = useState("");
   const [preview, setPreview] = useState<Kind[]>([]);
   const costs = config.draft.units;
+  const commandRules = config.command_sizes[setup.size];
+  const draftRules = setup.ruleset === "Command" ? commandRules : config.draft;
   const gold = roster.reduce((sum, kind) => sum + costs[kind].gold, 0);
   const people = roster.reduce((sum, kind) => sum + costs[kind].manpower, 0);
 
@@ -66,6 +70,8 @@ export function Setup({
   }, [roster, setup.ruleset, setup.opponent, setup.human_army, setup.seed]);
 
   function mode(value: "Classic" | "Expanded" | "Command") {
+    if (value === "Expanded" && setup.ruleset !== "Expanded") setRoster(["infantry", "cavalry", "artillery"]);
+    if (value === "Command" && setup.ruleset !== "Command") setRoster(config.command_sizes[setup.size].preset);
     setSetup({
       ...setup,
       ruleset: value,
@@ -75,15 +81,15 @@ export function Setup({
     setWarning("");
   }
   function buy(kind: Kind) {
-    if (roster.length >= config.draft.maximum) {
+    if (roster.length >= draftRules.maximum) {
       setWarning("Formation limit reached");
       return;
     }
-    if (gold + costs[kind].gold > config.draft.gold) {
+    if (gold + costs[kind].gold > draftRules.gold) {
       setWarning("Not enough gold");
       return;
     }
-    if (people + costs[kind].manpower > config.draft.manpower) {
+    if (people + costs[kind].manpower > draftRules.manpower) {
       setWarning("Manpower capacity exceeded");
       return;
     }
@@ -138,6 +144,7 @@ export function Setup({
                 <option value="ridge_forest">Ridge and Forest</option>
               </select>
             </label>}
+            {setup.ruleset === "Command" && <label>Battle size<select aria-label="Battle size" value={setup.size} onChange={(e) => {const size=e.target.value as SetupState["size"];setSetup({...setup,size});setRoster(config.command_sizes[size].preset);setWarning("");}}><option value="skirmish">Skirmish · 4 per side</option><option value="field">Field battle · 8 per side</option><option value="grand">Grand battle · 15 per side</option></select></label>}
             <label>
               Your army
               <select
@@ -227,19 +234,19 @@ export function Setup({
               {setup.ruleset === "Expanded" ? "Assemble your army" : setup.ruleset === "Command" ? "Command formation" : "Classic formation"}
             </h2>
           </div>
-          {setup.ruleset === "Expanded" ? (
+          {setup.ruleset === "Expanded" || setup.ruleset === "Command" ? (
             <>
               <div className="resource-row">
                 <div>
-                  <strong>{(config.draft.gold - gold).toLocaleString()}</strong>
+                  <strong>{(draftRules.gold - gold).toLocaleString()}</strong>
                   <span>GOLD LEFT</span>
                 </div>
                 <div>
-                  <strong>{config.draft.manpower - people}</strong>
+                  <strong>{draftRules.manpower - people}</strong>
                   <span>MANPOWER LEFT</span>
                 </div>
                 <div>
-                  <strong>{config.draft.maximum - roster.length}</strong>
+                  <strong>{draftRules.maximum - roster.length}</strong>
                   <span>SLOTS LEFT</span>
                 </div>
               </div>
@@ -269,7 +276,7 @@ export function Setup({
               </div>
               <div className="roster-list">
                 <span className="mini-heading">
-                  YOUR FORMATIONS · {roster.length}/{config.draft.maximum}
+                  YOUR FORMATIONS · {roster.length}/{draftRules.maximum}
                 </span>
                 {roster.map((kind, index) => (
                   <div key={`${kind}-${index}`} className="roster-slot">
@@ -283,12 +290,13 @@ export function Setup({
                   </div>
                 ))}
               </div>
+              {setup.ruleset === "Command" && <button onClick={() => {setRoster(commandRules.preset);setWarning("");}}>Use balanced preset</button>}
               <div className="ai-preview">
                 <span className="mini-heading">
                   ENEMY INTELLIGENCE · {setup.opponent.toUpperCase()}
                 </span>
                 <p>
-                  {preview.length
+                  {setup.ruleset === "Command" ? "Enemy drafts independently within the same budget." : preview.length
                     ? preview
                         .map((k) => k[0].toUpperCase() + k.slice(1))
                         .join(" / ")
@@ -299,12 +307,12 @@ export function Setup({
             </>
           ) : (
             <div className="classic-roster">
-              <p>{setup.ruleset === "Command" ? "Four formations per side move and fight simultaneously." : "Two equal armies. Three formations each."}</p>
+              <p>Two equal armies. Three formations each.</p>
               <div>
                 INFANTRY <span>·</span> CAVALRY <span>·</span> ARTILLERY
               </div>
               <small>
-                {setup.ruleset === "Command" ? "Issue persistent orders while battle time advances." : "Classic keeps the original research rules and checkpoint encoding intact."}
+                Classic keeps the original research rules and checkpoint encoding intact.
               </small>
             </div>
           )}
@@ -313,14 +321,14 @@ export function Setup({
               {warning || error}
             </p>
           )}
-          {setup.ruleset === "Expanded" && <div className="deploy-label">DEPLOY ARMY / CONFIRM ROSTER</div>}
+          {(setup.ruleset === "Expanded" || setup.ruleset === "Command") && <div className="deploy-label">DEPLOY ARMY / CONFIRM ROSTER</div>}
           <button
             className="primary-button start-button"
-            disabled={busy || (setup.ruleset === "Expanded" && !roster.length)}
+            disabled={busy || ((setup.ruleset === "Expanded" || setup.ruleset === "Command") && roster.length < (setup.ruleset === "Command" ? 2 : 1))}
             onClick={() =>
               onStart({
                 ...setup,
-                roster: setup.ruleset === "Expanded" ? roster : null,
+                roster: setup.ruleset === "Expanded" || setup.ruleset === "Command" ? roster : null,
               })
             }
           >

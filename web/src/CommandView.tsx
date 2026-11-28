@@ -26,19 +26,20 @@ type Box = {x:number; y:number; width:number; height:number};
 type Drag = {x:number; y:number; world:[number,number]; pan:boolean; moved:boolean; camera:Camera};
 type Position = {x:number; y:number; heading:number};
 
-function clampCamera(camera: Camera): Camera {
-  const halfX = 600 / camera.zoom, halfY = 400 / camera.zoom;
-  return { ...camera, x: Math.max(halfX, Math.min(1200-halfX, camera.x)), y: Math.max(halfY, Math.min(800-halfY, camera.y)) };
+function clampCamera(camera: Camera, width: number, height: number): Camera {
+  const halfX = width / 2 / camera.zoom, halfY = height / 2 / camera.zoom;
+  return { ...camera, x: Math.max(halfX, Math.min(width-halfX, camera.x)), y: Math.max(halfY, Math.min(height-halfY, camera.y)) };
 }
 
 export function CommandView({ initial, onNew, onReplay }: {
   initial: CommandGame; onNew: () => void; onReplay?: (record: unknown) => void;
 }) {
   const [game, setGame] = useState(initial);
+  const width = game.battle.width ?? 1200, height = game.battle.height ?? 800;
   const drawnRef = useRef<Record<string,Position>>(Object.fromEntries(Object.values(initial.battle.units).map((u) => [u.id, u])));
   const [selected, setSelected] = useState<string[]>([]);
   const [mode, setMode] = useState<"MOVE" | "ATTACK" | "DEFEND">("MOVE");
-  const [camera, setCamera] = useState<Camera>({x:600,y:400,zoom:1});
+  const [camera, setCamera] = useState<Camera>({x:(initial.battle.width ?? 1200)/2,y:(initial.battle.height ?? 800)/2,zoom:1});
   const [panMode, setPanMode] = useState(false);
   const [selectionBox, setSelectionBox] = useState<Box | null>(null);
   const [error, setError] = useState("");
@@ -67,7 +68,7 @@ export function CommandView({ initial, onNew, onReplay }: {
       const key = `${event.tick}:${event.type}:${event.unit}:${event.target}:${event.damage}`;
       if (seenEvents.current.has(key)) return false;
       seenEvents.current.add(key);
-      return event.type === "hit" || event.type === "routed" || event.type === "destroyed";
+      return event.type === "hit" || event.type === "routed" || event.type === "destroyed" || event.type === "rallied";
     });
     if (fresh.length) {
       setEffects(fresh);
@@ -106,7 +107,7 @@ export function CommandView({ initial, onNew, onReplay }: {
         const delta = Math.atan2(Math.sin(u.heading-a.heading),Math.cos(u.heading-a.heading));
         const p = {x:a.x+(u.x-a.x)*t, y:a.y+(u.y-a.y)*t, heading:a.heading+delta*t};
         drawnRef.current[u.id] = p;
-        nodes[u.id]?.setAttribute("transform",`translate(${p.x} ${p.y}) rotate(${p.heading*180/Math.PI})`);
+        nodes[u.id]?.setAttribute("transform",`translate(${p.x} ${p.y}) rotate(${p.heading*180/Math.PI}) scale(${game.battle.size === "grand" ? .62 : game.battle.size === "field" ? .8 : 1})`);
       }
       if (t < 1) frame = requestAnimationFrame(animate);
     }
@@ -156,7 +157,7 @@ export function CommandView({ initial, onNew, onReplay }: {
     const point = svg.current!.createSVGPoint();
     point.x = clientX; point.y = clientY;
     const result = point.matrixTransform(svg.current!.getScreenCTM()!.inverse());
-    return [Math.max(0,Math.min(1200,result.x)),Math.max(0,Math.min(800,result.y))];
+    return [Math.max(0,Math.min(width,result.x)),Math.max(0,Math.min(height,result.y))];
   }
   function select(u:CommandUnit,event:React.MouseEvent<SVGGElement>) {
     if (suppressClick.current) return;
@@ -191,7 +192,7 @@ export function CommandView({ initial, onNew, onReplay }: {
     current.moved = true;
     if (current.pan) {
       const bounds = svg.current!.getBoundingClientRect();
-      setCamera(clampCamera({...current.camera,x:current.camera.x-dx/bounds.width*1200/current.camera.zoom,y:current.camera.y-dy/bounds.height*800/current.camera.zoom}));
+      setCamera(clampCamera({...current.camera,x:current.camera.x-dx/bounds.width*width/current.camera.zoom,y:current.camera.y-dy/bounds.height*height/current.camera.zoom},width,height));
     } else {
       const [x,y] = world(event.clientX,event.clientY);
       setSelectionBox({x:Math.min(x,current.world[0]),y:Math.min(y,current.world[1]),width:Math.abs(x-current.world[0]),height:Math.abs(y-current.world[1])});
@@ -218,7 +219,7 @@ export function CommandView({ initial, onNew, onReplay }: {
       window.setTimeout(() => {suppressClick.current=false;},0);
     }
   }
-  function zoomBy(amount:number) { setCamera((old) => clampCamera({...old,zoom:Math.max(1,Math.min(2.4,old.zoom+amount))})); }
+  function zoomBy(amount:number) { setCamera((old) => clampCamera({...old,zoom:Math.max(1,Math.min(2.4,old.zoom+amount))},width,height)); }
   async function download() {
     try {
       const record = await call<object>(`/${game.id}/replay`);
@@ -241,14 +242,15 @@ export function CommandView({ initial, onNew, onReplay }: {
       <div className="war-clock"><span>ELAPSED</span><strong>{game.battle.time.toFixed(1)}<small>s</small></strong><span>{game.paused ? "PAUSED" : `${game.speed}× LIVE`}</span></div>
     </header>
     {tutorial && <section className="war-tutorial" aria-label="Command quick start"><strong>YOUR FIRST ORDERS</strong><span>1. Select a formation or drag a box.</span><span>2. Click ground to move, an enemy to attack.</span><span>3. Right-click to move, or choose Pan before dragging the map.</span><button onClick={() => {setTutorial(false);localStorage.setItem("echelon-command-tutorial","done");}}>Got it</button></section>}
-    <div className="war-topbar"><div className="war-time-controls"><button disabled={expired || game.battle.finished} onClick={() => void control(!game.paused)} aria-label={game.paused ? "Resume" : "Pause"}>{game.paused ? "▶ Resume" : "Ⅱ Pause"}</button><label>TIME SCALE<select disabled={expired || game.battle.finished} aria-label="Simulation speed" value={game.speed} onChange={(e) => void control(undefined,Number(e.target.value))}>{[0.5,1,2,4].map((n) => <option key={n} value={n}>{n}×</option>)}</select></label></div><div className="war-camera-controls"><button className={panMode?"active":""} onClick={() => setPanMode(!panMode)} aria-pressed={panMode}>Pan</button><button aria-label="Zoom out" onClick={() => zoomBy(-.2)}>−</button><span>{Math.round(camera.zoom*100)}%</span><button aria-label="Zoom in" onClick={() => zoomBy(.2)}>+</button><button onClick={() => setCamera({x:600,y:400,zoom:1})}>Reset view</button></div></div>
+    <div className="war-topbar"><div className="war-time-controls"><button disabled={expired || game.battle.finished} onClick={() => void control(!game.paused)} aria-label={game.paused ? "Resume" : "Pause"}>{game.paused ? "▶ Resume" : "Ⅱ Pause"}</button><label>TIME SCALE<select disabled={expired || game.battle.finished} aria-label="Simulation speed" value={game.speed} onChange={(e) => void control(undefined,Number(e.target.value))}>{[0.5,1,2,4].map((n) => <option key={n} value={n}>{n}×</option>)}</select></label></div><div className="war-camera-controls"><button className={panMode?"active":""} onClick={() => setPanMode(!panMode)} aria-pressed={panMode}>Pan</button><button aria-label="Zoom out" onClick={() => zoomBy(-.2)}>−</button><span>{Math.round(camera.zoom*100)}%</span><button aria-label="Zoom in" onClick={() => zoomBy(.2)}>+</button><button onClick={() => setCamera({x:width/2,y:height/2,zoom:1})}>Reset view</button></div></div>
     <div className="war-layout"><div className="war-field-wrap"><CommandBattlefield state={game.battle} drawn={drawnRef.current} selected={selected} camera={camera} selectionBox={selectionBox} activeEvents={effects} svgRef={svg} onUnitClick={select} onUnitKey={(u) => {if(u.army===game.human_army)setSelected([u.id]);else if(selected.length)void issue("ATTACK",u.id);}} onGroundClick={ground}
       onContextMenu={(e) => {e.preventDefault();if(!panMode&&selected.length) void issue("MOVE",world(e.clientX,e.clientY));}}
       onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={(e) => {touchPointers.current.delete(e.pointerId);drag.current=null;setSelectionBox(null);}} onWheel={(e) => {e.preventDefault();zoomBy(e.deltaY<0?.12:-.12);}} />
       <div className="war-map-foot"><span>BLUE <b>{game.battle.objective.Blue.toFixed(0)}</b> / 35</span><span>STRATEGIC GROUND</span><span>RED <b>{game.battle.objective.Red.toFixed(0)}</b> / 35</span></div></div>
       <aside className="war-side"><section className="war-orders"><span className="eyebrow">FIELD ORDERS</span><h2>Direct the line</h2><div className="war-order-grid">{(["MOVE","ATTACK","DEFEND"] as const).map((kind) => <button key={kind} className={mode===kind?"active":""} onClick={() => setMode(kind)}>{kind}</button>)}{["HOLD","RETREAT","STOP"].map((kind) => <button key={kind} disabled={!selected.length} onClick={() => void issue(kind)}>{kind}</button>)}</div><p>{mode === "ATTACK" ? "Select an enemy formation to engage." : mode === "DEFEND" ? "Choose ground to protect." : "Choose ground for selected formations."}</p></section>
       <section className="war-inspector"><span className="eyebrow">FORMATION STATUS</span>{chosen.length ? chosen.map((u) => <div key={u.id} className="war-inspector-unit"><strong>{u.id} · {u.kind}</strong><span>{u.order} · HP {u.health.toFixed(0)} · Morale {u.morale.toFixed(0)}</span><div className="inspector-bars"><i style={{width:`${u.health/(u.kind==="infantry"?100:u.kind==="cavalry"?85:65)*100}%`}}/><b style={{width:`${u.morale}%`}}/></div><small>Facing {Math.round(u.heading*180/Math.PI)}° {u.target ? `· Target ${u.target}` : ""}</small></div>) : <p>Select your troops to inspect their orders, strength, and facing.</p>}</section>
-      <section className="war-dispatch"><span className="eyebrow">FIELD DISPATCHES</span><div aria-live="polite">{last.length ? last.map((event,i) => <p key={`${event.tick}-${i}`} className={event.type==="routed"||event.type==="destroyed"?"war-alert":""}><time>{(event.tick/10).toFixed(1)}s</time> {event.unit ?? "Battle"} {event.type}{event.target ? ` ${event.target}` : ""}</p>) : <p>The armies are deploying.</p>}</div></section></aside></div>
+      <section className="war-dispatch"><span className="eyebrow">FIELD DISPATCHES</span><div aria-live="polite">{last.length ? last.map((event,i) => <p key={`${event.tick}-${i}`} className={event.type==="routed"||event.type==="destroyed"?"war-alert":""}><time>{(event.tick/10).toFixed(1)}s</time> {event.unit ?? "Battle"} {event.type}{event.target ? ` ${event.target}` : ""}{event.reason ? ` · ${event.reason}` : ""}</p>) : <p>The armies are deploying.</p>}</div></section></aside></div>
+    <nav className="formation-bar" aria-label="Friendly formations"><button onClick={() => setSelected(Object.values(game.battle.units).filter((u) => u.army === commander && u.effective).map((u) => u.id))}>Select all</button>{Object.values(game.battle.units).filter((u) => u.army === commander).map((u) => <button key={u.id} className={selected.includes(u.id) ? "active" : ""} disabled={!u.effective} onClick={(e) => setSelected((old) => e.shiftKey ? old.includes(u.id) ? old.filter((id) => id !== u.id) : [...old,u.id] : [u.id])} aria-pressed={selected.includes(u.id)}><strong>{u.id} {u.kind.slice(0,3).toUpperCase()}</strong><small>HP {u.health.toFixed(0)} · {u.morale_state ?? (u.effective ? "steady" : "routing")} · {u.order}</small></button>)}</nav>
     {error && <p className="form-error" role="alert">{error} {expired && <button onClick={onNew}>New battle</button>}</p>}
     {game.battle.finished && <section className="war-victory" role="status"><span className="eyebrow">AFTER ACTION REPORT</span><h2>{game.battle.winner ? `${game.battle.winner} victory` : "Drawn battle"}</h2><p>{game.battle.reason?.replace("_"," ")} · {game.battle.time.toFixed(1)} seconds</p><div><button onClick={() => void replay()}>Study replay</button><button onClick={() => void download()}>Download replay</button><button onClick={onNew}>New battle</button></div></section>}
   </div>;
